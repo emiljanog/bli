@@ -15,25 +15,32 @@ function toPublicMyAccountPath(pathname: string): string {
   return pathname.replace(/^\/web\/my-account/, "/my-account");
 }
 
+function withNoStore(response: NextResponse): NextResponse {
+  response.headers.set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
+  response.headers.set("Pragma", "no-cache");
+  response.headers.set("Expires", "0");
+  return response;
+}
+
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   if (pathname === "/user/login" || pathname === "/admin/login") {
     const loginUrl = request.nextUrl.clone();
     loginUrl.pathname = "/login";
-    return NextResponse.redirect(loginUrl);
+    return withNoStore(NextResponse.redirect(loginUrl));
   }
 
   if (pathname === "/web/my-account" || pathname.startsWith("/web/my-account/")) {
     const myAccountUrl = request.nextUrl.clone();
     myAccountUrl.pathname = toPublicMyAccountPath(pathname);
-    return NextResponse.redirect(myAccountUrl);
+    return withNoStore(NextResponse.redirect(myAccountUrl));
   }
 
   if (pathname === "/admin" || pathname.startsWith("/admin/")) {
     const dashboardUrl = request.nextUrl.clone();
     dashboardUrl.pathname = toDashboardPath(pathname);
-    return NextResponse.redirect(dashboardUrl);
+    return withNoStore(NextResponse.redirect(dashboardUrl));
   }
 
   const isLoggedIn =
@@ -59,17 +66,19 @@ export function middleware(request: NextRequest) {
   );
 
   if (pathname === "/login" && isLoggedIn) {
-    return NextResponse.redirect(new URL(isCustomer ? "/my-account" : "/dashboard", request.url));
+    return withNoStore(
+      NextResponse.redirect(new URL(isCustomer ? "/my-account" : "/dashboard", request.url)),
+    );
   }
 
   if (pathname.startsWith("/dashboard") && !isLoggedIn) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("next", pathname);
-    return NextResponse.redirect(loginUrl);
+    return withNoStore(NextResponse.redirect(loginUrl));
   }
 
   if (pathname.startsWith("/dashboard") && isLoggedIn && isCustomer) {
-    return NextResponse.redirect(new URL("/my-account", request.url));
+    return withNoStore(NextResponse.redirect(new URL("/my-account", request.url)));
   }
 
   if (
@@ -78,10 +87,10 @@ export function middleware(request: NextRequest) {
     isManager &&
     !isManagerAllowedPath
   ) {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
+    return withNoStore(NextResponse.redirect(new URL("/dashboard", request.url)));
   }
 
-  return NextResponse.next();
+  return withNoStore(NextResponse.next());
 }
 
 export const config = {
