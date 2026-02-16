@@ -99,9 +99,8 @@ export function middleware(request: NextRequest) {
   }
 
   if (internalPath !== pathname) {
-    const rewriteUrl = request.nextUrl.clone();
-    rewriteUrl.pathname = internalPath;
-    return NextResponse.rewrite(rewriteUrl);
+    const rewriteTarget = new URL(`http://127.0.0.1:3001${internalPath}${search}`);
+    return NextResponse.rewrite(rewriteTarget);
   }
 
   return NextResponse.next();
