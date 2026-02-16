@@ -7,16 +7,8 @@ import {
   resolveAdminRole,
 } from "./lib/admin-auth";
 
-function toDashboardPath(pathname: string): string {
-  return pathname === "/admin" ? "/dashboard" : pathname.replace(/^\/admin/, "/dashboard");
-}
-
 function toAdminPath(pathname: string): string {
   return pathname.replace(/^\/dashboard/, "/admin") || "/admin";
-}
-
-function toPublicMyAccountPath(pathname: string): string {
-  return pathname.replace(/^\/web\/my-account/, "/my-account");
 }
 
 function firstHeaderValue(value: string | null): string {
@@ -60,18 +52,6 @@ export function middleware(request: NextRequest) {
     const loginUrl = request.nextUrl.clone();
     loginUrl.pathname = "/login";
     return NextResponse.redirect(loginUrl);
-  }
-
-  if (pathname === "/web/my-account" || pathname.startsWith("/web/my-account/")) {
-    const myAccountUrl = request.nextUrl.clone();
-    myAccountUrl.pathname = toPublicMyAccountPath(pathname);
-    return NextResponse.redirect(myAccountUrl);
-  }
-
-  if (pathname === "/admin" || pathname.startsWith("/admin/")) {
-    const dashboardUrl = request.nextUrl.clone();
-    dashboardUrl.pathname = toDashboardPath(pathname);
-    return NextResponse.redirect(dashboardUrl);
   }
 
   const internalPath =
