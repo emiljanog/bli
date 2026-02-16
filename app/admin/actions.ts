@@ -11,6 +11,7 @@ import sharp from "sharp";
 import {
   ADMIN_COOKIE_NAME,
   ADMIN_ROLE_COOKIE_NAME,
+  ADMIN_SIDEBAR_COOKIE_NAME,
   ADMIN_USERNAME_COOKIE_NAME,
   getAdminRoleFromCookieStore,
   getAdminUsernameFromCookieStore,
@@ -271,7 +272,13 @@ export async function logoutAdminAction() {
   const cookieStore = await cookies();
   const secure = process.env.NODE_ENV === "production";
 
-  for (const cookieName of [ADMIN_COOKIE_NAME, ADMIN_ROLE_COOKIE_NAME, ADMIN_USERNAME_COOKIE_NAME]) {
+  for (const cookieName of [
+    ADMIN_COOKIE_NAME,
+    ADMIN_ROLE_COOKIE_NAME,
+    ADMIN_USERNAME_COOKIE_NAME,
+    ADMIN_SIDEBAR_COOKIE_NAME,
+  ]) {
+    cookieStore.delete(cookieName);
     cookieStore.set({
       name: cookieName,
       value: "",
@@ -280,10 +287,11 @@ export async function logoutAdminAction() {
       secure,
       path: "/",
       maxAge: 0,
+      expires: new Date(0),
     });
   }
 
-  redirect("/user/login");
+  redirect("/admin/login");
 }
 
 export async function updateBrandingSettingsAction(formData: FormData) {

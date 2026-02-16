@@ -6,8 +6,8 @@ import { FormEvent, useMemo, useState } from "react";
 export function AdminLoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [username, setUsername] = useState("emiljano");
-  const [password, setPassword] = useState("emiljano@bli.al");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
