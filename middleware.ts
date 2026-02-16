@@ -7,58 +7,20 @@ import {
   resolveAdminRole,
 } from "./lib/admin-auth";
 
-function toDashboardPath(pathname: string): string {
-  return pathname === "/admin" ? "/dashboard" : pathname.replace(/^\/admin/, "/dashboard");
-}
-
 function toAdminPath(pathname: string): string {
   return pathname.replace(/^\/dashboard/, "/admin") || "/admin";
-}
-
-function toPublicMyAccountPath(pathname: string): string {
-  return pathname.replace(/^\/web\/my-account/, "/my-account");
 }
 
 function toInternalMyAccountPath(pathname: string): string {
   return pathname.replace(/^\/my-account/, "/web/my-account");
 }
 
-function firstHeaderValue(value: string | null): string {
-  if (!value) return "";
-  return value.split(",")[0].trim();
-}
-
-function isLocalHost(value: string): boolean {
-  return value.startsWith("localhost") || value.startsWith("127.0.0.1");
-}
-
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const search = request.nextUrl.search;
-  const aliasFlag = "__route_alias";
-  const isAliasRequest = request.nextUrl.searchParams.get(aliasFlag) === "1";
-  const host = firstHeaderValue(request.headers.get("host"));
-  const forwardedHost = firstHeaderValue(request.headers.get("x-forwarded-host"));
-  const forwardedProto = firstHeaderValue(request.headers.get("x-forwarded-proto"));
-  const isInternalProxyRequest =
-    isLocalHost(host) && (!forwardedHost || isLocalHost(forwardedHost));
-
-  if (!isInternalProxyRequest && !isAliasRequest) {
-    if (pathname === "/user/login") {
-      return NextResponse.redirect(new URL(`/login${search}`, request.url));
-    }
-
-    if (pathname === "/admin/login") {
-      return NextResponse.redirect(new URL(`/login${search}`, request.url));
-    }
-
-    if (pathname === "/admin" || pathname.startsWith("/admin/")) {
-      return NextResponse.redirect(new URL(`${toDashboardPath(pathname)}${search}`, request.url));
-    }
-
-    if (pathname === "/web/my-account" || pathname.startsWith("/web/my-account/")) {
-      return NextResponse.redirect(new URL(`${toPublicMyAccountPath(pathname)}${search}`, request.url));
-    }
+  if (pathname === "/user/login") {
+    const loginUrl = request.nextUrl.clone();
+    loginUrl.pathname = "/login";
+    return NextResponse.redirect(loginUrl);
   }
 
   const internalPath =
@@ -119,8 +81,6 @@ export function middleware(request: NextRequest) {
   if (internalPath !== pathname) {
     const rewriteTarget = request.nextUrl.clone();
     rewriteTarget.pathname = internalPath;
-    rewriteTarget.search = search;
-    rewriteTarget.searchParams.set(aliasFlag, "1");
     return NextResponse.rewrite(rewriteTarget);
   }
 

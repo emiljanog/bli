@@ -154,12 +154,7 @@ export function AdminLoginForm() {
       </div>
 
       <div className="mt-2 flex justify-end">
-        <button
-          type="button"
-          className="text-sm font-medium text-slate-600 transition hover:text-slate-800"
-        >
-          Forgot password?
-        </button>
+        <span className="text-sm font-medium text-slate-600">Sign in to continue.</span>
       </div>
 
       {error ? (
@@ -175,37 +170,6 @@ export function AdminLoginForm() {
       >
         {isSubmitting ? "Signing in..." : "Sign in"}
       </button>
-
-      <div className="mt-6">
-        <div className="flex items-center gap-3">
-          <span className="h-px flex-1 border-t border-dashed border-slate-300" />
-          <span className="text-xs font-medium text-slate-500">Or sign in with</span>
-          <span className="h-px flex-1 border-t border-dashed border-slate-300" />
-        </div>
-
-        <div className="mt-3 grid grid-cols-3 gap-2">
-          <button
-            type="button"
-            className="flex h-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-lg font-semibold text-slate-700 transition hover:bg-slate-50"
-          >
-            <span aria-hidden>G</span>
-          </button>
-          <button
-            type="button"
-            className="flex h-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-lg font-semibold text-[#1d63d8] transition hover:bg-slate-50"
-          >
-            <span aria-hidden>f</span>
-          </button>
-          <button
-            type="button"
-            className="flex h-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-lg font-semibold text-slate-900 transition hover:bg-slate-50"
-          >
-            <svg viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4" aria-hidden>
-              <path d="M16.08 12.15c.01 2.05 1.8 2.73 1.82 2.74-.02.05-.28.93-.93 1.83-.56.78-1.14 1.56-2.05 1.58-.89.02-1.18-.53-2.2-.53-1.03 0-1.35.51-2.18.55-.87.03-1.52-.86-2.09-1.63-1.16-1.58-2.04-4.46-.85-6.53.59-1.03 1.64-1.67 2.78-1.69.86-.02 1.67.58 2.2.58.53 0 1.52-.72 2.57-.61.44.02 1.67.18 2.46 1.34-.06.04-1.47.86-1.46 2.37zM14.74 6.97c.46-.56.77-1.33.69-2.1-.66.03-1.47.44-1.94 1-.43.49-.81 1.27-.71 2.02.74.06 1.49-.38 1.96-.92z" />
-            </svg>
-          </button>
-        </div>
-      </div>
 
     </form>
   );

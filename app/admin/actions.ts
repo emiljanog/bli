@@ -7,7 +7,6 @@ import path from "node:path";
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import sharp from "sharp";
 import {
   ADMIN_COOKIE_NAME,
   ADMIN_ROLE_COOKIE_NAME,
@@ -149,6 +148,8 @@ async function ensureUploadSubdir(subdir: string): Promise<{ absolute: string; p
 
 async function bufferToWebpPublicUrl(buffer: Buffer, subdir: string): Promise<string | null> {
   try {
+    const sharpModule = await import("sharp");
+    const sharp = sharpModule.default;
     const uploadDir = await ensureUploadSubdir(subdir);
     const filename = `${Date.now()}-${randomUUID()}.webp`;
     const targetPath = path.join(uploadDir.absolute, filename);
@@ -291,7 +292,7 @@ export async function logoutAdminAction() {
     });
   }
 
-  redirect("/admin/login");
+  redirect("/login");
 }
 
 export async function updateBrandingSettingsAction(formData: FormData) {
