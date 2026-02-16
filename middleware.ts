@@ -23,24 +23,40 @@ function toInternalMyAccountPath(pathname: string): string {
   return pathname.replace(/^\/my-account/, "/web/my-account");
 }
 
+function firstHeaderValue(value: string | null): string {
+  if (!value) return "";
+  return value.split(",")[0].trim();
+}
+
+function isLocalHost(value: string): boolean {
+  return value.startsWith("localhost") || value.startsWith("127.0.0.1");
+}
+
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const search = request.nextUrl.search;
+  const host = firstHeaderValue(request.headers.get("host"));
+  const forwardedHost = firstHeaderValue(request.headers.get("x-forwarded-host"));
+  const forwardedProto = firstHeaderValue(request.headers.get("x-forwarded-proto"));
+  const isInternalProxyRequest =
+    isLocalHost(host) && (!forwardedHost || isLocalHost(forwardedHost));
 
-  if (pathname === "/user/login") {
-    return NextResponse.redirect(new URL(`/login${search}`, request.url));
-  }
+  if (!isInternalProxyRequest) {
+    if (pathname === "/user/login") {
+      return NextResponse.redirect(new URL(`/login${search}`, request.url));
+    }
 
-  if (pathname === "/admin/login") {
-    return NextResponse.redirect(new URL(`/login${search}`, request.url));
-  }
+    if (pathname === "/admin/login") {
+      return NextResponse.redirect(new URL(`/login${search}`, request.url));
+    }
 
-  if (pathname === "/admin" || pathname.startsWith("/admin/")) {
-    return NextResponse.redirect(new URL(`${toDashboardPath(pathname)}${search}`, request.url));
-  }
+    if (pathname === "/admin" || pathname.startsWith("/admin/")) {
+      return NextResponse.redirect(new URL(`${toDashboardPath(pathname)}${search}`, request.url));
+    }
 
-  if (pathname === "/web/my-account" || pathname.startsWith("/web/my-account/")) {
-    return NextResponse.redirect(new URL(`${toPublicMyAccountPath(pathname)}${search}`, request.url));
+    if (pathname === "/web/my-account" || pathname.startsWith("/web/my-account/")) {
+      return NextResponse.redirect(new URL(`${toPublicMyAccountPath(pathname)}${search}`, request.url));
+    }
   }
 
   const internalPath =
@@ -99,7 +115,15 @@ export function middleware(request: NextRequest) {
   }
 
   if (internalPath !== pathname) {
-    const rewriteTarget = new URL(`http://127.0.0.1:3001${internalPath}${search}`);
+    if (forwardedHost) {
+      const protocol = forwardedProto || "https";
+      const rewriteTarget = new URL(`${protocol}://${forwardedHost}${internalPath}${search}`);
+      return NextResponse.rewrite(rewriteTarget);
+    }
+
+    const rewriteTarget = request.nextUrl.clone();
+    rewriteTarget.pathname = internalPath;
+    rewriteTarget.search = search;
     return NextResponse.rewrite(rewriteTarget);
   }
 
