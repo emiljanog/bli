@@ -9,28 +9,30 @@ import {
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-
-  if (pathname === "/web/my-account" || pathname.startsWith("/web/my-account/")) {
-    return NextResponse.redirect(new URL(pathname.replace(/^\/web/, ""), request.url));
-  }
-
-  if (pathname === "/admin" || pathname.startsWith("/admin/")) {
-    return NextResponse.redirect(new URL("/user/login", request.url));
-  }
-
-  const internalPath =
-    pathname === "/dashboard" || pathname.startsWith("/dashboard/")
-      ? pathname.replace(/^\/dashboard/, "/admin") || "/admin"
-      : pathname === "/my-account" || pathname.startsWith("/my-account/")
-        ? pathname.replace(/^\/my-account/, "/web/my-account")
-        : pathname === "/user/login"
-          ? "/admin/login"
-          : pathname;
   const isLoggedIn =
     request.cookies.get(ADMIN_COOKIE_NAME)?.value === ADMIN_SESSION_VALUE;
   const currentRole = resolveAdminRole(request.cookies.get(ADMIN_ROLE_COOKIE_NAME)?.value ?? "Customer");
   const isCustomer = currentRole === "Customer";
   const isManager = currentRole === "Manager";
+
+  if (pathname === "/user/login") {
+    const loginUrl = request.nextUrl.clone();
+    loginUrl.pathname = "/admin/login";
+    return NextResponse.redirect(loginUrl);
+  }
+
+  if (pathname === "/dashboard" || pathname.startsWith("/dashboard/")) {
+    const adminUrl = request.nextUrl.clone();
+    adminUrl.pathname = pathname.replace(/^\/dashboard/, "/admin") || "/admin";
+    return NextResponse.redirect(adminUrl);
+  }
+
+  if (pathname === "/my-account" || pathname.startsWith("/my-account/")) {
+    const accountUrl = request.nextUrl.clone();
+    accountUrl.pathname = pathname.replace(/^\/my-account/, "/web/my-account");
+    return NextResponse.redirect(accountUrl);
+  }
+
   const managerAllowedPrefixes = [
     "/admin",
     "/admin/products",
@@ -44,49 +46,31 @@ export function middleware(request: NextRequest) {
   ];
 
   const isManagerAllowedPath = managerAllowedPrefixes.some((prefix) =>
-    prefix === "/admin" ? internalPath === "/admin" : internalPath.startsWith(prefix),
+    prefix === "/admin" ? pathname === "/admin" : pathname.startsWith(prefix),
   );
 
-  if (internalPath === "/admin/login" && isLoggedIn) {
-    return NextResponse.redirect(new URL(isCustomer ? "/my-account" : "/dashboard", request.url));
+  if (pathname === "/admin/login" && isLoggedIn) {
+    return NextResponse.redirect(new URL(isCustomer ? "/web/my-account" : "/admin", request.url));
   }
 
-  if (internalPath.startsWith("/admin") && internalPath !== "/admin/login" && !isLoggedIn) {
-    const loginUrl = new URL("/user/login", request.url);
+  if (pathname.startsWith("/admin") && pathname !== "/admin/login" && !isLoggedIn) {
+    const loginUrl = new URL("/admin/login", request.url);
     loginUrl.searchParams.set("next", pathname);
     return NextResponse.redirect(loginUrl);
   }
 
-  if (internalPath.startsWith("/admin") && internalPath !== "/admin/login" && isLoggedIn && isCustomer) {
-    return NextResponse.redirect(new URL("/my-account", request.url));
+  if (pathname.startsWith("/admin") && pathname !== "/admin/login" && isLoggedIn && isCustomer) {
+    return NextResponse.redirect(new URL("/web/my-account", request.url));
   }
 
   if (
-    internalPath.startsWith("/admin") &&
-    internalPath !== "/admin/login" &&
+    pathname.startsWith("/admin") &&
+    pathname !== "/admin/login" &&
     isLoggedIn &&
     isManager &&
     !isManagerAllowedPath
   ) {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
-  }
-
-  if (pathname === "/dashboard" || pathname.startsWith("/dashboard/")) {
-    const rewriteUrl = request.nextUrl.clone();
-    rewriteUrl.pathname = internalPath;
-    return NextResponse.rewrite(rewriteUrl);
-  }
-
-  if (pathname === "/my-account" || pathname.startsWith("/my-account/")) {
-    const rewriteUrl = request.nextUrl.clone();
-    rewriteUrl.pathname = internalPath;
-    return NextResponse.rewrite(rewriteUrl);
-  }
-
-  if (pathname === "/user/login") {
-    const rewriteUrl = request.nextUrl.clone();
-    rewriteUrl.pathname = "/admin/login";
-    return NextResponse.rewrite(rewriteUrl);
+    return NextResponse.redirect(new URL("/admin", request.url));
   }
 
   return NextResponse.next();
