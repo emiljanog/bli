@@ -79,9 +79,8 @@ export function middleware(request: NextRequest) {
   }
 
   if (internalPath !== pathname) {
-    const rewriteTarget = request.nextUrl.clone();
-    rewriteTarget.pathname = internalPath;
-    return NextResponse.rewrite(rewriteTarget);
+    const rewritePath = `${internalPath}${request.nextUrl.search}`;
+    return NextResponse.rewrite(rewritePath);
   }
 
   return NextResponse.next();
