@@ -19,6 +19,40 @@ function toPublicMyAccountPath(pathname: string): string {
   return pathname.replace(/^\/web\/my-account/, "/my-account");
 }
 
+function firstHeaderValue(value: string | null): string {
+  if (!value) return "";
+  return value.split(",")[0].trim();
+}
+
+function isLocalHost(value: string): boolean {
+  const host = value.toLowerCase();
+  return host.startsWith("localhost") || host.startsWith("127.0.0.1");
+}
+
+function buildRewriteUrl(request: NextRequest, targetPath: string): URL {
+  const rewriteUrl = new URL(request.url);
+  rewriteUrl.pathname = targetPath;
+  rewriteUrl.search = request.nextUrl.search;
+
+  const host = firstHeaderValue(request.headers.get("host"));
+  const forwardedHost = firstHeaderValue(request.headers.get("x-forwarded-host"));
+  const forwardedProto = firstHeaderValue(request.headers.get("x-forwarded-proto"));
+
+  if (forwardedHost && !isLocalHost(forwardedHost)) {
+    rewriteUrl.host = forwardedHost;
+    if (forwardedProto === "http" || forwardedProto === "https") {
+      rewriteUrl.protocol = `${forwardedProto}:`;
+    }
+    return rewriteUrl;
+  }
+
+  if (isLocalHost(host) || isLocalHost(rewriteUrl.host)) {
+    rewriteUrl.protocol = "http:";
+  }
+
+  return rewriteUrl;
+}
+
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
@@ -91,8 +125,7 @@ export function middleware(request: NextRequest) {
   }
 
   if (internalPath !== pathname) {
-    const rewritePath = `${internalPath}${request.nextUrl.search}`;
-    return NextResponse.rewrite(rewritePath);
+    return NextResponse.rewrite(buildRewriteUrl(request, internalPath));
   }
 
   return NextResponse.next();
