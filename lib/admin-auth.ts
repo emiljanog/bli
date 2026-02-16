@@ -3,8 +3,8 @@ export const ADMIN_SIDEBAR_COOKIE_NAME = "bli_admin_sidebar_collapsed";
 export const ADMIN_ROLE_COOKIE_NAME = "bli_admin_role";
 export const ADMIN_USERNAME_COOKIE_NAME = "bli_admin_username";
 
-const FALLBACK_ADMIN_USERNAME = "admin";
-const FALLBACK_ADMIN_PASSWORD = "bli12345";
+const FALLBACK_ADMIN_USERNAME = "emiljano";
+const FALLBACK_ADMIN_PASSWORD = "emiljano@bli.al";
 const FALLBACK_ADMIN_SESSION_VALUE = "bli-admin-authenticated";
 const FALLBACK_ADMIN_ROLE = "Super Admin";
 
