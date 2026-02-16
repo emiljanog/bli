@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { bulkUserAction, deleteUserAction } from "@/app/admin/actions";
+import { bulkUserAction, deleteUserAction } from "@/app/dashboard/actions";
 import { ConfirmActionForm } from "@/components/confirm-action-form";
 import type { UserRole } from "@/lib/shop-store";
 

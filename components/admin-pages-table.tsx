@@ -7,7 +7,7 @@ import {
   deletePageAction,
   restorePageAction,
   trashPageAction,
-} from "@/app/admin/actions";
+} from "@/app/dashboard/actions";
 import type { PublicationStatus } from "@/lib/shop-store";
 
 export type AdminPageRow = {

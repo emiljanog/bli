@@ -143,12 +143,6 @@ export async function POST(request: Request) {
       createdAt: new Date().toISOString().slice(0, 10),
     });
 
-    revalidatePath("/admin");
-    revalidatePath("/admin/orders");
-    revalidatePath("/admin/sales");
-    revalidatePath("/admin/coupons");
-    revalidatePath("/admin/customers");
-    revalidatePath("/admin/users");
     revalidatePath("/dashboard");
     revalidatePath("/dashboard/orders");
     revalidatePath("/dashboard/sales");

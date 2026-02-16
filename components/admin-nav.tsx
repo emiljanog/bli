@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import type { ReactNode } from "react";
-import { SETTINGS_TABS } from "@/app/admin/settings/settings-tabs";
+import { SETTINGS_TABS } from "@/app/dashboard/settings/settings-tabs";
 import { canAccessSettings, type AdminRole } from "@/lib/admin-auth";
 
 type NavLinkItem = {

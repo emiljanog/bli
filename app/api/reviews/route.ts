@@ -51,7 +51,6 @@ export async function POST(request: Request) {
       revalidatePath(`/product/${product.slug}`);
       revalidatePath(`/shop/${product.slug}`);
     }
-    revalidatePath("/admin/reviews");
     revalidatePath("/dashboard/reviews");
 
     return NextResponse.json({ success: true, review });

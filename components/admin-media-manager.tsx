@@ -6,7 +6,7 @@ import {
   bulkMediaAction,
   deleteMediaPermanentlyAction,
   restoreMediaAction,
-} from "@/app/admin/actions";
+} from "@/app/dashboard/actions";
 import { AdminMediaTrashAction } from "@/components/admin-media-trash-action";
 
 export type AdminMediaRow = {

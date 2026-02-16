@@ -7,42 +7,12 @@ import {
   resolveAdminRole,
 } from "./lib/admin-auth";
 
-function toAdminPath(pathname: string): string {
-  return pathname.replace(/^\/dashboard/, "/admin") || "/admin";
+function toDashboardPath(pathname: string): string {
+  return pathname === "/admin" ? "/dashboard" : pathname.replace(/^\/admin/, "/dashboard");
 }
 
-function firstHeaderValue(value: string | null): string {
-  if (!value) return "";
-  return value.split(",")[0].trim();
-}
-
-function isLocalHost(value: string): boolean {
-  const host = value.toLowerCase();
-  return host.startsWith("localhost") || host.startsWith("127.0.0.1");
-}
-
-function buildRewriteUrl(request: NextRequest, targetPath: string): URL {
-  const rewriteUrl = new URL(request.url);
-  rewriteUrl.pathname = targetPath;
-  rewriteUrl.search = request.nextUrl.search;
-
-  const host = firstHeaderValue(request.headers.get("host"));
-  const forwardedHost = firstHeaderValue(request.headers.get("x-forwarded-host"));
-  const forwardedProto = firstHeaderValue(request.headers.get("x-forwarded-proto"));
-
-  if (forwardedHost && !isLocalHost(forwardedHost)) {
-    rewriteUrl.host = forwardedHost;
-    if (forwardedProto === "http" || forwardedProto === "https") {
-      rewriteUrl.protocol = `${forwardedProto}:`;
-    }
-    return rewriteUrl;
-  }
-
-  if (isLocalHost(host) || isLocalHost(rewriteUrl.host)) {
-    rewriteUrl.protocol = "http:";
-  }
-
-  return rewriteUrl;
+function toPublicMyAccountPath(pathname: string): string {
+  return pathname.replace(/^\/web\/my-account/, "/my-account");
 }
 
 export function middleware(request: NextRequest) {
@@ -54,10 +24,17 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  const internalPath =
-    pathname === "/dashboard" || pathname.startsWith("/dashboard/")
-      ? toAdminPath(pathname)
-      : pathname;
+  if (pathname === "/web/my-account" || pathname.startsWith("/web/my-account/")) {
+    const myAccountUrl = request.nextUrl.clone();
+    myAccountUrl.pathname = toPublicMyAccountPath(pathname);
+    return NextResponse.redirect(myAccountUrl);
+  }
+
+  if (pathname === "/admin" || pathname.startsWith("/admin/")) {
+    const dashboardUrl = request.nextUrl.clone();
+    dashboardUrl.pathname = toDashboardPath(pathname);
+    return NextResponse.redirect(dashboardUrl);
+  }
 
   const isLoggedIn =
     request.cookies.get(ADMIN_COOKIE_NAME)?.value === ADMIN_SESSION_VALUE;
@@ -66,19 +43,19 @@ export function middleware(request: NextRequest) {
   const isManager = currentRole === "Manager";
 
   const managerAllowedPrefixes = [
-    "/admin",
-    "/admin/products",
-    "/admin/orders",
-    "/admin/categories",
-    "/admin/tags",
-    "/admin/sales",
-    "/admin/customers",
-    "/admin/coupons",
-    "/admin/reviews",
+    "/dashboard",
+    "/dashboard/products",
+    "/dashboard/orders",
+    "/dashboard/categories",
+    "/dashboard/tags",
+    "/dashboard/sales",
+    "/dashboard/customers",
+    "/dashboard/coupons",
+    "/dashboard/reviews",
   ];
 
   const isManagerAllowedPath = managerAllowedPrefixes.some((prefix) =>
-    prefix === "/admin" ? internalPath === "/admin" : internalPath.startsWith(prefix),
+    prefix === "/dashboard" ? pathname === "/dashboard" : pathname.startsWith(prefix),
   );
 
   if (pathname === "/login" && isLoggedIn) {
@@ -102,10 +79,6 @@ export function middleware(request: NextRequest) {
     !isManagerAllowedPath
   ) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
-  }
-
-  if (internalPath !== pathname) {
-    return NextResponse.rewrite(buildRewriteUrl(request, internalPath));
   }
 
   return NextResponse.next();

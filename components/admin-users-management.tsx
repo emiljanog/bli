@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { registerUserAction } from "@/app/admin/actions";
+import { registerUserAction } from "@/app/dashboard/actions";
 import { AdminUsersTable, type AdminUserRow } from "@/components/admin-users-table";
 import type { UserRole } from "@/lib/shop-store";
 

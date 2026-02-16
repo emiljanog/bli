@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { bulkOrderAction, updateOrderStatusAction } from "@/app/admin/actions";
+import { bulkOrderAction, updateOrderStatusAction } from "@/app/dashboard/actions";
 import type { OrderStatus } from "@/lib/shop-store";
 
 export type AdminOrderRow = {

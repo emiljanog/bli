@@ -10,7 +10,7 @@ import {
   getAdminRoleFromCookieStore,
   getAdminUsernameFromCookieStore,
 } from "@/lib/admin-auth";
-import { logoutAdminAction } from "@/app/admin/actions";
+import { logoutAdminAction } from "@/app/dashboard/actions";
 import { AdminSidebar } from "@/components/admin-sidebar";
 import { getSiteSettings } from "@/lib/shop-store";
 

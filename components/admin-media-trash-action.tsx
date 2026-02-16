@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { trashMediaAction } from "@/app/admin/actions";
+import { trashMediaAction } from "@/app/dashboard/actions";
 
 type AdminMediaTrashActionProps = {
   mediaId: string;
