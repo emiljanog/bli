@@ -1,0 +1,2185 @@
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import path from "node:path";
+
+export type Product = {
+  id: string;
+  slug: string;
+  name: string;
+  category: string;
+  description: string;
+  image: string;
+  gallery: string[];
+  tags: string[];
+  price: number;
+  stock: number;
+  publishStatus: PublicationStatus;
+  trashedAt: string | null;
+};
+
+export type OrderStatus = "Pending" | "Paid" | "Shipped" | "Cancelled";
+export type PublicationStatus = "Published" | "Draft";
+
+export type Order = {
+  id: string;
+  customer: string;
+  productId: string;
+  quantity: number;
+  total: number;
+  discount: number;
+  couponCode: string | null;
+  status: OrderStatus;
+  createdAt: string;
+};
+
+export type Sale = {
+  id: string;
+  source: string;
+  amount: number;
+  createdAt: string;
+};
+
+export type AdminAccount = {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  createdAt: string;
+};
+
+export type CouponType = "percent" | "fixed";
+
+export type Coupon = {
+  id: string;
+  code: string;
+  description: string;
+  type: CouponType;
+  value: number;
+  minSubtotal: number;
+  isActive: boolean;
+  createdAt: string;
+};
+
+export type ReviewStatus = "Approved" | "Pending" | "Hidden";
+
+export type ProductReview = {
+  id: string;
+  productId: string;
+  author: string;
+  rating: number;
+  comment: string;
+  status: ReviewStatus;
+  createdAt: string;
+};
+
+export type UserSource = "Admin" | "Checkout";
+export type UserRole = "Super Admin" | "Admin" | "Manager" | "Customer";
+
+export type User = {
+  id: string;
+  name: string;
+  username: string;
+  email: string;
+  password: string;
+  role: UserRole;
+  phone: string;
+  city: string;
+  address: string;
+  source: UserSource;
+  createdAt: string;
+  isActive: boolean;
+  passwordResetRequired: boolean;
+};
+
+export type Page = {
+  id: string;
+  name: string;
+  slug: string;
+  content: string;
+  publishStatus: PublicationStatus;
+  trashedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type MediaAsset = {
+  id: string;
+  url: string;
+  originalUrl: string | null;
+  assignedTo: MediaAssignedTo;
+  assignedToId: string | null;
+  uploadedBy: string | null;
+  alt: string;
+  description: string;
+  createdAt: string;
+  updatedAt: string;
+  trashedAt: string | null;
+};
+
+export type MediaAssignedTo = "Unassigned" | "Product" | "Page" | "User";
+
+export type SiteMenuItem = {
+  label: string;
+  href: string;
+};
+
+export type SiteSettings = {
+  siteTitle: string;
+  brandName: string;
+  logoUrl: string;
+  iconUrl: string;
+  useLogoOnly: boolean;
+  headerMenu: SiteMenuItem[];
+};
+
+type ProductInput = {
+  name: string;
+  category: string;
+  price: number;
+  stock: number;
+  slug?: string;
+  description?: string;
+  image?: string;
+  gallery?: string[];
+  tags?: string[];
+  publishStatus?: PublicationStatus;
+};
+
+type CouponInput = {
+  code: string;
+  description: string;
+  type: CouponType;
+  value: number;
+  minSubtotal?: number;
+  isActive?: boolean;
+};
+
+type ProductReviewInput = {
+  productId: string;
+  author: string;
+  rating: number;
+  comment: string;
+  status?: ReviewStatus;
+};
+
+type UserInput = {
+  name: string;
+  username?: string;
+  email: string;
+  password: string;
+  role?: UserRole;
+  phone?: string;
+  city?: string;
+  address?: string;
+  source?: UserSource;
+};
+
+type UserUpdateInput = {
+  name: string;
+  username?: string;
+  email: string;
+  password?: string;
+  role: UserRole;
+  phone?: string;
+  city?: string;
+  address?: string;
+};
+
+type PageInput = {
+  name: string;
+  slug?: string;
+  content?: string;
+  publishStatus?: PublicationStatus;
+};
+
+type ListProductsOptions = {
+  includeTrashed?: boolean;
+  onlyTrashed?: boolean;
+  includeDrafts?: boolean;
+};
+
+type ListPagesOptions = {
+  includeTrashed?: boolean;
+  onlyTrashed?: boolean;
+  includeDrafts?: boolean;
+};
+
+type ListMediaOptions = {
+  includeTrashed?: boolean;
+  onlyTrashed?: boolean;
+};
+
+type OrderUpdateInput = {
+  customer: string;
+  productId: string;
+  quantity: number;
+  status: OrderStatus;
+  total?: number;
+  discount?: number;
+  couponCode?: string | null;
+};
+
+type MediaInput = {
+  url: string;
+  alt?: string;
+  description?: string;
+  assignedTo?: MediaAssignedTo;
+  assignedToId?: string;
+  uploadedBy?: string;
+};
+
+type ListReviewOptions = {
+  productId?: string;
+  status?: ReviewStatus | "all";
+};
+
+type CouponApplyResult = {
+  coupon: Coupon | null;
+  discount: number;
+  error?: string;
+};
+
+type Store = {
+  seq: number;
+  products: Product[];
+  orders: Order[];
+  sales: Sale[];
+  accounts: AdminAccount[];
+  coupons: Coupon[];
+  reviews: ProductReview[];
+  users: User[];
+  pages: Page[];
+  media: MediaAsset[];
+  settings: SiteSettings;
+};
+
+type ProductSeed = {
+  id: string;
+  name: string;
+  category: string;
+  price: number;
+  stock: number;
+};
+
+const PRODUCT_SEEDS: ProductSeed[] = [
+  { id: "PRD-1001", name: "AeroBook 14", category: "Tech Essentials", price: 899, stock: 22 },
+  { id: "PRD-1002", name: "NoiseBuds Pro", category: "Tech Essentials", price: 129, stock: 40 },
+  { id: "PRD-1003", name: "Pulse Smartwatch", category: "Tech Essentials", price: 219, stock: 31 },
+  { id: "PRD-1004", name: "StreamCam 4K", category: "Tech Essentials", price: 159, stock: 18 },
+  { id: "PRD-1005", name: "Core Router X6", category: "Tech Essentials", price: 179, stock: 26 },
+  { id: "PRD-1006", name: "Volt Power Bank", category: "Tech Essentials", price: 59, stock: 57 },
+  { id: "PRD-1007", name: "Urban Chino Pants", category: "Urban Fashion", price: 69, stock: 35 },
+  { id: "PRD-1008", name: "Essential Overshirt", category: "Urban Fashion", price: 74, stock: 27 },
+  { id: "PRD-1009", name: "Street Denim Jacket", category: "Urban Fashion", price: 109, stock: 19 },
+  { id: "PRD-1010", name: "Canvas Daily Sneakers", category: "Urban Fashion", price: 89, stock: 41 },
+  { id: "PRD-1011", name: "Signature Hoodie", category: "Urban Fashion", price: 79, stock: 29 },
+  { id: "PRD-1012", name: "Classic Leather Belt", category: "Urban Fashion", price: 39, stock: 60 },
+  { id: "PRD-1013", name: "Minimal Floor Lamp", category: "Home & Living", price: 129, stock: 16 },
+  { id: "PRD-1014", name: "Oak Side Table", category: "Home & Living", price: 149, stock: 13 },
+  { id: "PRD-1015", name: "Cloud Bedding Set", category: "Home & Living", price: 99, stock: 24 },
+  { id: "PRD-1016", name: "Aroma Diffuser", category: "Home & Living", price: 45, stock: 52 },
+  { id: "PRD-1017", name: "Kitchen Knife Set", category: "Home & Living", price: 79, stock: 33 },
+  { id: "PRD-1018", name: "Modular Storage Box", category: "Home & Living", price: 34, stock: 66 },
+  { id: "PRD-1019", name: "Trail Running Shoes", category: "Sports & Outdoor", price: 119, stock: 28 },
+  { id: "PRD-1020", name: "Active Dry T-Shirt", category: "Sports & Outdoor", price: 35, stock: 74 },
+  { id: "PRD-1021", name: "Thermal Water Bottle", category: "Sports & Outdoor", price: 29, stock: 80 },
+  { id: "PRD-1022", name: "Foldable Yoga Mat", category: "Sports & Outdoor", price: 49, stock: 46 },
+  { id: "PRD-1023", name: "Resistance Bands Kit", category: "Sports & Outdoor", price: 39, stock: 68 },
+  { id: "PRD-1024", name: "Compact Fitness Bag", category: "Sports & Outdoor", price: 59, stock: 37 },
+  { id: "PRD-1025", name: "Hydra Face Serum", category: "Beauty & Care", price: 42, stock: 58 },
+  { id: "PRD-1026", name: "Daily Clean Gel", category: "Beauty & Care", price: 24, stock: 84 },
+  { id: "PRD-1027", name: "Repair Hair Mask", category: "Beauty & Care", price: 31, stock: 47 },
+  { id: "PRD-1028", name: "Glow SPF 50 Cream", category: "Beauty & Care", price: 36, stock: 62 },
+  { id: "PRD-1029", name: "Vitamin C Toner", category: "Beauty & Care", price: 28, stock: 55 },
+  { id: "PRD-1030", name: "Premium Care Bundle", category: "Beauty & Care", price: 89, stock: 20 },
+];
+
+const PRODUCTS_WITH_GALLERY = new Set(["PRD-1001", "PRD-1002", "PRD-1003", "PRD-1004", "PRD-1005"]);
+
+declare global {
+  var __bli_store__: Store | undefined;
+}
+
+const STORE_PERSIST_PATH = path.join(process.cwd(), ".bli-store", "store.json");
+const STORE_PERSIST_DEBOUNCE_MS = 50;
+
+const proxiedValues = new WeakMap<object, object>();
+let persistTimer: ReturnType<typeof setTimeout> | null = null;
+let isHydratingStore = false;
+let lastPersistedPayload = "";
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function mergePersistedSettings(base: SiteSettings, input: unknown): SiteSettings {
+  if (!isRecord(input)) return base;
+  const draft = input as Partial<SiteSettings>;
+  return {
+    ...base,
+    ...draft,
+    headerMenu: Array.isArray(draft.headerMenu) ? draft.headerMenu : base.headerMenu,
+  };
+}
+
+function mergePersistedStore(base: Store, input: unknown): Store {
+  if (!isRecord(input)) return base;
+  const draft = input as Partial<Store>;
+  return {
+    ...base,
+    ...draft,
+    seq: typeof draft.seq === "number" ? draft.seq : base.seq,
+    products: Array.isArray(draft.products) ? draft.products : base.products,
+    orders: Array.isArray(draft.orders) ? draft.orders : base.orders,
+    sales: Array.isArray(draft.sales) ? draft.sales : base.sales,
+    accounts: Array.isArray(draft.accounts) ? draft.accounts : base.accounts,
+    coupons: Array.isArray(draft.coupons) ? draft.coupons : base.coupons,
+    reviews: Array.isArray(draft.reviews) ? draft.reviews : base.reviews,
+    users: Array.isArray(draft.users) ? draft.users : base.users,
+    pages: Array.isArray(draft.pages) ? draft.pages : base.pages,
+    media: Array.isArray(draft.media) ? draft.media : base.media,
+    settings: mergePersistedSettings(base.settings, draft.settings),
+  };
+}
+
+function loadStoreFromDisk(): Store | null {
+  try {
+    const payload = readFileSync(STORE_PERSIST_PATH, "utf8");
+    if (!payload.trim()) return null;
+    const parsed = JSON.parse(payload) as unknown;
+    const merged = mergePersistedStore(createInitialStore(), parsed);
+    lastPersistedPayload = JSON.stringify(merged);
+    return merged;
+  } catch {
+    return null;
+  }
+}
+
+function persistStoreNow(): void {
+  if (isHydratingStore) return;
+  if (!globalThis.__bli_store__) return;
+
+  try {
+    const payload = JSON.stringify(globalThis.__bli_store__);
+    if (payload === lastPersistedPayload) return;
+    mkdirSync(path.dirname(STORE_PERSIST_PATH), { recursive: true });
+    writeFileSync(STORE_PERSIST_PATH, payload, "utf8");
+    lastPersistedPayload = payload;
+  } catch {
+    // Ignore filesystem errors and keep in-memory fallback behavior.
+  }
+}
+
+function scheduleStorePersist(): void {
+  if (isHydratingStore) return;
+  if (persistTimer) {
+    clearTimeout(persistTimer);
+  }
+  persistTimer = setTimeout(() => {
+    persistTimer = null;
+    persistStoreNow();
+  }, STORE_PERSIST_DEBOUNCE_MS);
+}
+
+function toPersistentProxy<T>(value: T): T {
+  if (typeof value !== "object" || value === null) {
+    return value;
+  }
+
+  const existing = proxiedValues.get(value as object);
+  if (existing) {
+    return existing as T;
+  }
+
+  const proxy = new Proxy(value as object, {
+    get(target, property, receiver) {
+      const current = Reflect.get(target, property, receiver);
+      if (typeof current === "object" && current !== null) {
+        return toPersistentProxy(current);
+      }
+      return current;
+    },
+    set(target, property, nextValue, receiver) {
+      const previousValue = Reflect.get(target, property, receiver);
+      const wrappedValue =
+        typeof nextValue === "object" && nextValue !== null
+          ? toPersistentProxy(nextValue)
+          : nextValue;
+      const didSet = Reflect.set(target, property, wrappedValue, receiver);
+      if (didSet && !Object.is(previousValue, wrappedValue)) {
+        scheduleStorePersist();
+      }
+      return didSet;
+    },
+    deleteProperty(target, property) {
+      const hadProperty = Reflect.has(target, property);
+      const didDelete = Reflect.deleteProperty(target, property);
+      if (didDelete && hadProperty) {
+        scheduleStorePersist();
+      }
+      return didDelete;
+    },
+  });
+
+  proxiedValues.set(value as object, proxy);
+  return proxy as T;
+}
+
+function mediaUrl(seed: string): string {
+  return `https://picsum.photos/seed/${encodeURIComponent(seed)}/1200/900`;
+}
+
+function defaultImageById(productId: string): string {
+  return mediaUrl(`bli-${productId}`);
+}
+
+function defaultGalleryById(productId: string): string[] {
+  if (!PRODUCTS_WITH_GALLERY.has(productId)) return [];
+  return [
+    mediaUrl(`bli-${productId}-1`),
+    mediaUrl(`bli-${productId}-2`),
+    mediaUrl(`bli-${productId}-3`),
+    mediaUrl(`bli-${productId}-4`),
+  ];
+}
+
+function asSafeString(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function normalizeStringArray(input: unknown): string[] {
+  if (!Array.isArray(input)) return [];
+  return Array.from(new Set(input.map((item) => asSafeString(item)).filter(Boolean)));
+}
+
+function normalizeCouponCode(value: unknown): string {
+  return asSafeString(value)
+    .toUpperCase()
+    .replace(/[^A-Z0-9-]+/g, "");
+}
+
+function toEmail(value: unknown): string {
+  return asSafeString(value).toLowerCase();
+}
+
+function normalizeUserRole(value: unknown): UserRole {
+  const role = asSafeString(value).toLowerCase();
+  if (role === "super admin" || role === "superadmin") return "Super Admin";
+  if (role === "admin") return "Admin";
+  if (role === "manager") return "Manager";
+  return "Customer";
+}
+
+function normalizePublicationStatus(value: unknown): PublicationStatus {
+  const normalized = asSafeString(value).toLowerCase();
+  return normalized === "draft" ? "Draft" : "Published";
+}
+
+function normalizeMediaAssignedTo(value: unknown): MediaAssignedTo {
+  const normalized = asSafeString(value).toLowerCase();
+  if (normalized === "product") return "Product";
+  if (normalized === "page") return "Page";
+  if (normalized === "user") return "User";
+  return "Unassigned";
+}
+
+function normalizeUsername(value: unknown): string {
+  const base = asSafeString(value)
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "");
+
+  return base || "user";
+}
+
+function usernameFromName(name: string): string {
+  return normalizeUsername(name);
+}
+
+function nextUniqueUsername(base: string, taken: Set<string>): string {
+  const normalizedBase = normalizeUsername(base);
+  let candidate = normalizedBase;
+  let index = 1;
+
+  while (taken.has(candidate)) {
+    candidate = `${normalizedBase}${index}`;
+    index += 1;
+  }
+
+  taken.add(candidate);
+  return candidate;
+}
+
+function clampInt(value: number, min: number, max: number): number {
+  if (!Number.isFinite(value)) return min;
+  return Math.min(max, Math.max(min, Math.round(value)));
+}
+
+function money(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Number(value.toFixed(2)));
+}
+
+function extractIdNumber(value: string): number {
+  const digits = value.replace(/[^0-9]+/g, "");
+  if (!digits) return Number.NaN;
+  const parsed = Number(digits);
+  return Number.isFinite(parsed) ? parsed : Number.NaN;
+}
+
+function formatEntityId(value: number): string {
+  const safe = Math.max(1, Math.floor(value));
+  return String(safe).padStart(3, "0");
+}
+
+function maxEntityIdNumber(items: Array<{ id: string }>): number {
+  let max = 0;
+  for (const item of items) {
+    const idNumber = extractIdNumber(item.id);
+    if (Number.isFinite(idNumber)) {
+      max = Math.max(max, idNumber);
+    }
+  }
+  return max;
+}
+
+function nextEntityId(items: Array<{ id: string }>): string {
+  return formatEntityId(maxEntityIdNumber(items) + 1);
+}
+
+function hasCleanNumericIds(items: Array<{ id: string }>): boolean {
+  return items.every((item) => /^[0-9]+$/.test(item.id));
+}
+
+function remapEntityIdsInPlace<T extends { id: string }>(items: T[]): Map<string, string> {
+  const map = new Map<string, string>();
+  const entries = items.map((item, index) => ({
+    item,
+    index,
+    oldId: item.id,
+    numericId: extractIdNumber(item.id),
+  }));
+
+  entries.sort((a, b) => {
+    const safeA = Number.isFinite(a.numericId) ? a.numericId : Number.POSITIVE_INFINITY;
+    const safeB = Number.isFinite(b.numericId) ? b.numericId : Number.POSITIVE_INFINITY;
+    if (safeA !== safeB) return safeA - safeB;
+    return a.index - b.index;
+  });
+
+  for (let index = 0; index < entries.length; index += 1) {
+    const nextId = formatEntityId(index + 1);
+    entries[index].item.id = nextId;
+    map.set(entries[index].oldId, nextId);
+  }
+
+  return map;
+}
+
+function slugify(input: string): string {
+  const normalized = input
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return normalized || "product";
+}
+
+function nextUniqueSlug(baseSlug: string, taken: Set<string>): string {
+  let candidate = baseSlug || "product";
+  let index = 2;
+
+  while (taken.has(candidate)) {
+    candidate = `${baseSlug}-${index}`;
+    index += 1;
+  }
+
+  taken.add(candidate);
+  return candidate;
+}
+
+function cloneProduct(product: Product): Product {
+  return {
+    ...product,
+    gallery: [...product.gallery],
+    tags: [...product.tags],
+  };
+}
+
+function cloneCoupon(coupon: Coupon): Coupon {
+  return { ...coupon };
+}
+
+function cloneReview(review: ProductReview): ProductReview {
+  return { ...review };
+}
+
+function cloneUser(user: User): User {
+  return { ...user };
+}
+
+function clonePage(page: Page): Page {
+  return { ...page };
+}
+
+function cloneMedia(media: MediaAsset): MediaAsset {
+  return { ...media };
+}
+
+function cloneSiteSettings(settings: SiteSettings): SiteSettings {
+  return {
+    ...settings,
+    headerMenu: settings.headerMenu.map((item) => ({ ...item })),
+  };
+}
+
+const RESERVED_PAGE_SLUGS = new Set([
+  "admin",
+  "dashboard",
+  "user",
+  "api",
+  "shop",
+  "product",
+  "cart",
+  "checkout",
+  "collections",
+  "contact",
+  "my-account",
+]);
+
+function isReservedPageSlug(slug: string): boolean {
+  return RESERVED_PAGE_SLUGS.has(slug);
+}
+
+function nextUniquePageSlug(baseSlug: string, taken: Set<string>): string {
+  const fallbackBase = baseSlug || "page";
+  let candidate = fallbackBase;
+  let index = 2;
+
+  while (taken.has(candidate) || isReservedPageSlug(candidate)) {
+    candidate = `${fallbackBase}-${index}`;
+    index += 1;
+  }
+
+  taken.add(candidate);
+  return candidate;
+}
+
+function defaultHeaderMenu(): SiteMenuItem[] {
+  return [
+    { label: "Home", href: "/" },
+    { label: "Shop", href: "/shop" },
+    { label: "Collections", href: "/collections" },
+    { label: "Contact", href: "/contact" },
+    { label: "My Account", href: "/my-account" },
+  ];
+}
+
+function defaultSiteSettings(): SiteSettings {
+  return {
+    siteTitle: "BLI Shop",
+    brandName: "BLI",
+    logoUrl: "/logo.svg",
+    iconUrl: "/icon.png",
+    useLogoOnly: false,
+    headerMenu: defaultHeaderMenu(),
+  };
+}
+
+function normalizeMenuHref(value: unknown): string {
+  const raw = asSafeString(value);
+  if (!raw) return "/";
+  if (raw.startsWith("#")) return raw;
+  if (/^https?:\/\//i.test(raw)) return raw;
+
+  let href = raw.startsWith("/") ? raw : `/${raw}`;
+  href = href.replace(/\/{2,}/g, "/");
+  if (href.length > 1 && href.endsWith("/")) {
+    href = href.slice(0, -1);
+  }
+  return href || "/";
+}
+
+function normalizeHeaderMenu(input: unknown): SiteMenuItem[] {
+  if (!Array.isArray(input)) return [];
+
+  const items: SiteMenuItem[] = [];
+  const seen = new Set<string>();
+
+  for (const rawItem of input) {
+    if (typeof rawItem !== "object" || rawItem === null) continue;
+    const item = rawItem as { label?: unknown; href?: unknown };
+    const label = asSafeString(item.label).slice(0, 60);
+    const href = normalizeMenuHref(item.href);
+    if (!label) continue;
+
+    const dedupeKey = `${label.toLowerCase()}|${href}`;
+    if (seen.has(dedupeKey)) continue;
+
+    seen.add(dedupeKey);
+    items.push({ label, href });
+  }
+
+  return items.slice(0, 20);
+}
+
+function normalizeProductsInPlace(products: Product[]): void {
+  const takenSlugs = new Set<string>();
+
+  for (const product of products) {
+    product.name = asSafeString(product.name);
+    product.category = asSafeString(product.category);
+    product.description = asSafeString(product.description);
+    product.tags = normalizeStringArray(product.tags);
+    product.gallery = normalizeStringArray(product.gallery);
+    product.image = asSafeString(product.image) || defaultImageById(product.id);
+    if (product.trashedAt === undefined) {
+      product.trashedAt = null;
+    }
+    product.publishStatus = normalizePublicationStatus(product.publishStatus);
+
+    if (product.gallery.length === 0) {
+      product.gallery = defaultGalleryById(product.id);
+    }
+
+    const baseSlug = slugify(asSafeString(product.slug) || product.name || product.id);
+    product.slug = nextUniqueSlug(baseSlug, takenSlugs);
+  }
+}
+
+function normalizeCouponsInPlace(coupons: Coupon[]): void {
+  const seenCodes = new Set<string>();
+
+  for (const coupon of coupons) {
+    coupon.code = normalizeCouponCode(coupon.code);
+    coupon.description = asSafeString(coupon.description);
+    coupon.value = money(coupon.value);
+    coupon.minSubtotal = money(coupon.minSubtotal);
+    if (coupon.type !== "percent" && coupon.type !== "fixed") {
+      coupon.type = "percent";
+    }
+    if (coupon.type === "percent") {
+      coupon.value = Math.min(100, coupon.value);
+    }
+    coupon.isActive = coupon.isActive !== false;
+    if (seenCodes.has(coupon.code)) {
+      coupon.code = `${coupon.code}-${coupon.id}`;
+    }
+    seenCodes.add(coupon.code);
+  }
+}
+
+function normalizeReviewsInPlace(reviews: ProductReview[]): void {
+  for (const review of reviews) {
+    review.productId = asSafeString(review.productId);
+    review.author = asSafeString(review.author) || "Anonymous";
+    review.comment = asSafeString(review.comment);
+    review.rating = clampInt(review.rating, 1, 5);
+    if (review.status !== "Approved" && review.status !== "Pending" && review.status !== "Hidden") {
+      review.status = "Approved";
+    }
+  }
+}
+
+function normalizeOrdersInPlace(orders: Order[]): void {
+  for (const order of orders) {
+    order.customer = asSafeString(order.customer);
+    order.productId = asSafeString(order.productId);
+    order.quantity = Math.max(1, Math.floor(order.quantity));
+    order.total = money(order.total);
+    order.discount = money(order.discount ?? 0);
+    order.couponCode = normalizeCouponCode(order.couponCode ?? "") || null;
+    if (
+      order.status !== "Pending" &&
+      order.status !== "Paid" &&
+      order.status !== "Shipped" &&
+      order.status !== "Cancelled"
+    ) {
+      order.status = "Pending";
+    }
+  }
+}
+
+function normalizeUsersInPlace(users: User[]): void {
+  const seenEmails = new Set<string>();
+  const seenUsernames = new Set<string>();
+
+  for (const user of users) {
+    user.name = asSafeString(user.name);
+    user.username = normalizeUsername(user.username || usernameFromName(user.name));
+    user.email = toEmail(user.email);
+    user.password = asSafeString(user.password);
+    user.role = normalizeUserRole(user.role);
+    user.phone = asSafeString(user.phone);
+    user.city = asSafeString(user.city);
+    user.address = asSafeString(user.address);
+    if (user.source !== "Admin" && user.source !== "Checkout") {
+      user.source = "Admin";
+    }
+    if (typeof user.isActive !== "boolean") {
+      user.isActive = true;
+    }
+    if (typeof user.passwordResetRequired !== "boolean") {
+      user.passwordResetRequired = false;
+    }
+
+    if (seenEmails.has(user.email)) {
+      user.email = `${user.id.toLowerCase()}@bli.local`;
+    }
+    seenEmails.add(user.email);
+
+    if (seenUsernames.has(user.username)) {
+      user.username = nextUniqueUsername(user.username, seenUsernames);
+    } else {
+      seenUsernames.add(user.username);
+    }
+  }
+}
+
+function normalizePagesInPlace(pages: Page[]): void {
+  const takenSlugs = new Set<string>();
+
+  for (const page of pages) {
+    page.name = asSafeString(page.name) || "Untitled page";
+    page.content = asSafeString(page.content);
+    const baseSlug = slugify(asSafeString(page.slug) || page.name || page.id);
+    page.slug = nextUniquePageSlug(baseSlug, takenSlugs);
+    page.publishStatus = normalizePublicationStatus(page.publishStatus);
+    if (page.trashedAt === undefined) {
+      page.trashedAt = null;
+    }
+    page.createdAt = asSafeString(page.createdAt) || new Date().toISOString().slice(0, 10);
+    page.updatedAt = asSafeString(page.updatedAt) || page.createdAt;
+  }
+}
+
+function normalizeMediaInPlace(mediaItems: MediaAsset[]): void {
+  const seenUrls = new Set<string>();
+
+  for (let index = mediaItems.length - 1; index >= 0; index -= 1) {
+    const media = mediaItems[index];
+    media.url = asSafeString(media.url);
+    if (!media.url || seenUrls.has(media.url)) {
+      mediaItems.splice(index, 1);
+      continue;
+    }
+    seenUrls.add(media.url);
+    media.originalUrl = asSafeString(media.originalUrl) || null;
+    media.assignedTo = normalizeMediaAssignedTo(media.assignedTo);
+    media.assignedToId = asSafeString(media.assignedToId) || null;
+    media.uploadedBy = asSafeString(media.uploadedBy) || null;
+    media.alt = asSafeString(media.alt);
+    media.description = asSafeString(media.description);
+    media.createdAt = asSafeString(media.createdAt) || new Date().toISOString().slice(0, 10);
+    media.updatedAt = asSafeString(media.updatedAt) || media.createdAt;
+    if (media.trashedAt === undefined) {
+      media.trashedAt = null;
+    }
+  }
+}
+
+function ensureProductMediaInLibraryInPlace(s: Store): void {
+  const urlToMedia = new Map(s.media.map((media) => [media.url, media]));
+  const today = new Date().toISOString().slice(0, 10);
+  let nextMediaId = maxEntityIdNumber(s.media) + 1;
+
+  for (const product of s.products) {
+    const productMediaUrls = [product.image, ...product.gallery].map((url) => asSafeString(url)).filter(Boolean);
+
+    for (const url of productMediaUrls) {
+      const existingMedia = urlToMedia.get(url);
+      if (existingMedia) {
+        if (existingMedia.assignedTo === "Unassigned") {
+          existingMedia.assignedTo = "Product";
+          existingMedia.assignedToId = product.id;
+          existingMedia.updatedAt = today;
+        }
+        continue;
+      }
+      const media: MediaAsset = {
+        id: formatEntityId(nextMediaId),
+        url,
+        originalUrl: null,
+        assignedTo: "Product",
+        assignedToId: product.id,
+        uploadedBy: null,
+        alt: product.name,
+        description: "",
+        createdAt: today,
+        updatedAt: today,
+        trashedAt: null,
+      };
+      nextMediaId += 1;
+      s.media.unshift(media);
+      urlToMedia.set(url, media);
+    }
+  }
+}
+
+function normalizeSiteSettingsInPlace(settings: SiteSettings): void {
+  settings.siteTitle = asSafeString(settings.siteTitle) || "BLI Shop";
+  settings.brandName = asSafeString(settings.brandName) || "BLI";
+  settings.logoUrl = asSafeString(settings.logoUrl) || "/logo.svg";
+  settings.iconUrl = asSafeString(settings.iconUrl) || settings.logoUrl || "/icon.png";
+  settings.useLogoOnly = Boolean(settings.useLogoOnly);
+  settings.headerMenu = Array.isArray(settings.headerMenu)
+    ? normalizeHeaderMenu(settings.headerMenu)
+    : defaultHeaderMenu();
+}
+
+function buildSeedProduct(seed: ProductSeed): Product {
+  return {
+    ...seed,
+    slug: slugify(seed.name),
+    description: "",
+    image: defaultImageById(seed.id),
+    gallery: defaultGalleryById(seed.id),
+    tags: [],
+    publishStatus: "Published",
+    trashedAt: null,
+  };
+}
+
+const DEMO_FIRST_NAMES = [
+  "Emiljano",
+  "Ardit",
+  "Lea",
+  "Klea",
+  "Arian",
+  "Jon",
+  "Mira",
+  "Sara",
+  "Endri",
+  "Erisa",
+  "Luan",
+  "Denis",
+  "Bora",
+  "Aldi",
+  "Elona",
+  "Sindi",
+  "Drin",
+  "Arba",
+  "Kristi",
+  "Nora",
+];
+
+const DEMO_LAST_NAMES = [
+  "Gogo",
+  "Kola",
+  "Dema",
+  "Rama",
+  "Hoxha",
+  "Muca",
+  "Leka",
+  "Mema",
+  "Pepa",
+  "Sula",
+  "Gjini",
+  "Krasniqi",
+  "Tafa",
+  "Nika",
+  "Doda",
+  "Biba",
+  "Mata",
+  "Rrasa",
+  "Prendi",
+  "Kodra",
+];
+
+const DEMO_CITIES = [
+  "Tirane",
+  "Durres",
+  "Vlore",
+  "Shkoder",
+  "Elbasan",
+  "Fier",
+  "Korce",
+  "Lezhe",
+];
+
+function demoDateByIndex(index: number): string {
+  const day = (index % 28) + 1;
+  const month = index % 2 === 0 ? "01" : "02";
+  return `2026-${month}-${String(day).padStart(2, "0")}`;
+}
+
+function generateDemoUsers(count: number, startId = 7101): User[] {
+  return Array.from({ length: count }, (_, index) => {
+    const firstName = DEMO_FIRST_NAMES[(index * 7 + 3) % DEMO_FIRST_NAMES.length];
+    const lastName = DEMO_LAST_NAMES[(index * 11 + 5) % DEMO_LAST_NAMES.length];
+    const city = DEMO_CITIES[(index * 5 + 2) % DEMO_CITIES.length];
+    const name = `${firstName} ${lastName}`;
+    const baseUsername = normalizeUsername(`${firstName}${lastName}`);
+    const role: UserRole =
+      index % 23 === 0 ? "Admin" : index % 11 === 0 ? "Manager" : "Customer";
+    const source: UserSource = role === "Customer" ? "Checkout" : "Admin";
+    const suffix = index + 1;
+    const phoneSerial = String(1000000 + ((index * 7919) % 9000000));
+
+    return {
+      id: `USR-${String(startId + index)}`,
+      name,
+      username: baseUsername,
+      email: `${baseUsername}${suffix}@demo.bli`,
+      password: "demo1234",
+      role,
+      phone: `+35569${phoneSerial}`,
+      city,
+      address: `Street ${10 + suffix}, ${city}`,
+      source,
+      createdAt: demoDateByIndex(index),
+      isActive: true,
+      passwordResetRequired: false,
+    };
+  });
+}
+
+function createInitialStore(): Store {
+  return {
+    seq: 1100,
+    products: PRODUCT_SEEDS.map(buildSeedProduct),
+    orders: [
+      {
+        id: "ORD-2001",
+        customer: "Arber D.",
+        productId: "PRD-1002",
+        quantity: 1,
+        total: 129,
+        discount: 0,
+        couponCode: null,
+        status: "Paid",
+        createdAt: "2026-02-10",
+      },
+      {
+        id: "ORD-2002",
+        customer: "Sara K.",
+        productId: "PRD-1001",
+        quantity: 1,
+        total: 899,
+        discount: 0,
+        couponCode: null,
+        status: "Shipped",
+        createdAt: "2026-02-11",
+      },
+      {
+        id: "ORD-2003",
+        customer: "Denisa T.",
+        productId: "PRD-1004",
+        quantity: 2,
+        total: 318,
+        discount: 0,
+        couponCode: null,
+        status: "Pending",
+        createdAt: "2026-02-12",
+      },
+    ],
+    sales: [
+      { id: "SAL-3001", source: "Website", amount: 2400, createdAt: "2026-02-08" },
+      { id: "SAL-3002", source: "Instagram", amount: 1600, createdAt: "2026-02-10" },
+      { id: "SAL-3003", source: "Email Campaign", amount: 980, createdAt: "2026-02-12" },
+    ],
+    accounts: [
+      {
+        id: "ADM-4001",
+        name: "Marcus George",
+        email: "admin@bli.al",
+        role: "Admin",
+        createdAt: "2026-01-01",
+      },
+    ],
+    coupons: [
+      {
+        id: "CPN-5001",
+        code: "WELCOME10",
+        description: "10% off for new orders",
+        type: "percent",
+        value: 10,
+        minSubtotal: 50,
+        isActive: true,
+        createdAt: "2026-02-01",
+      },
+      {
+        id: "CPN-5002",
+        code: "SAVE25",
+        description: "Flat $25 off",
+        type: "fixed",
+        value: 25,
+        minSubtotal: 150,
+        isActive: true,
+        createdAt: "2026-02-03",
+      },
+    ],
+    reviews: [
+      {
+        id: "REV-6001",
+        productId: "PRD-1001",
+        author: "Erisa L.",
+        rating: 5,
+        comment: "Produkt super, shume i shpejte dhe bateri e mire.",
+        status: "Approved",
+        createdAt: "2026-02-09",
+      },
+      {
+        id: "REV-6002",
+        productId: "PRD-1002",
+        author: "Luan M.",
+        rating: 4,
+        comment: "Kualitet i mire per cmimin.",
+        status: "Approved",
+        createdAt: "2026-02-10",
+      },
+      {
+        id: "REV-6003",
+        productId: "PRD-1003",
+        author: "Ari T.",
+        rating: 5,
+        comment: "Me pelqeu dizajni dhe ekranit.",
+        status: "Approved",
+        createdAt: "2026-02-12",
+      },
+    ],
+    users: [
+      {
+        id: "USR-7001",
+        name: "Emiljano Gogo",
+        username: "emiljano",
+        email: "emiljano@bli.local",
+        password: "demo1234",
+        role: "Super Admin",
+        phone: "+355691001001",
+        city: "Tirane",
+        address: "Rr. e Kavajes",
+        source: "Admin",
+        createdAt: "2026-02-01",
+        isActive: true,
+        passwordResetRequired: false,
+      },
+      ...generateDemoUsers(100, 7002),
+    ],
+    pages: [],
+    media: [],
+    settings: defaultSiteSettings(),
+  };
+}
+
+function migrateLegacyUsersInPlace(s: Store): void {
+  const hasEmiljanoUser = s.users.some((user) => normalizeUsername(user.username) === "emiljano");
+  const hasLegacySeedUsers = s.users.some(
+    (user) => user.email === "sara@example.com" || user.email === "arber@example.com",
+  );
+  if (!hasLegacySeedUsers && hasEmiljanoUser) return;
+
+  const existingEmiljano = s.users.find(
+    (user) => normalizeUsername(user.username) === "emiljano" || toEmail(user.email) === "emiljano@bli.local",
+  );
+
+  s.users = [
+    {
+      id: existingEmiljano?.id || "USR-7001",
+      name: existingEmiljano?.name || "Emiljano Gogo",
+      username: "emiljano",
+      email: "emiljano@bli.local",
+      password: existingEmiljano?.password || "demo1234",
+      role: "Super Admin",
+      phone: existingEmiljano?.phone || "+355691001001",
+      city: existingEmiljano?.city || "Tirane",
+      address: existingEmiljano?.address || "Rr. e Kavajes",
+      source: "Admin",
+      createdAt: existingEmiljano?.createdAt || "2026-02-01",
+      isActive: true,
+      passwordResetRequired: false,
+    },
+    ...generateDemoUsers(100, 7002),
+  ];
+}
+
+function migrateLegacyEntityIdsInPlace(s: Store): void {
+  const entityCollections: Array<Array<{ id: string }>> = [
+    s.products,
+    s.orders,
+    s.sales,
+    s.accounts,
+    s.coupons,
+    s.reviews,
+    s.users,
+    s.pages,
+    s.media,
+  ];
+  const needsMigration = entityCollections.some((items) => !hasCleanNumericIds(items));
+  if (!needsMigration) return;
+
+  const productIdMap = remapEntityIdsInPlace(s.products);
+  remapEntityIdsInPlace(s.orders);
+  remapEntityIdsInPlace(s.sales);
+  remapEntityIdsInPlace(s.accounts);
+  remapEntityIdsInPlace(s.coupons);
+  remapEntityIdsInPlace(s.reviews);
+  remapEntityIdsInPlace(s.users);
+  remapEntityIdsInPlace(s.pages);
+  remapEntityIdsInPlace(s.media);
+
+  for (const order of s.orders) {
+    const mappedProductId = productIdMap.get(order.productId);
+    if (mappedProductId) {
+      order.productId = mappedProductId;
+    }
+  }
+
+  for (const review of s.reviews) {
+    const mappedProductId = productIdMap.get(review.productId);
+    if (mappedProductId) {
+      review.productId = mappedProductId;
+    }
+  }
+}
+
+function store(): Store {
+  if (!globalThis.__bli_store__) {
+    isHydratingStore = true;
+    try {
+      globalThis.__bli_store__ = toPersistentProxy(loadStoreFromDisk() ?? createInitialStore());
+
+      if (!globalThis.__bli_store__.coupons) {
+        globalThis.__bli_store__.coupons = [];
+      }
+      if (!globalThis.__bli_store__.reviews) {
+        globalThis.__bli_store__.reviews = [];
+      }
+      if (!globalThis.__bli_store__.users) {
+        globalThis.__bli_store__.users = [];
+      }
+      if (!globalThis.__bli_store__.pages) {
+        globalThis.__bli_store__.pages = [];
+      }
+      if (!globalThis.__bli_store__.media) {
+        globalThis.__bli_store__.media = [];
+      }
+      if (!globalThis.__bli_store__.settings) {
+        globalThis.__bli_store__.settings = defaultSiteSettings();
+      }
+
+      migrateLegacyUsersInPlace(globalThis.__bli_store__);
+      migrateLegacyEntityIdsInPlace(globalThis.__bli_store__);
+      normalizeOrdersInPlace(globalThis.__bli_store__.orders);
+      normalizeProductsInPlace(globalThis.__bli_store__.products);
+      normalizeCouponsInPlace(globalThis.__bli_store__.coupons);
+      normalizeReviewsInPlace(globalThis.__bli_store__.reviews);
+      normalizeUsersInPlace(globalThis.__bli_store__.users);
+      normalizePagesInPlace(globalThis.__bli_store__.pages);
+      normalizeMediaInPlace(globalThis.__bli_store__.media);
+      if (globalThis.__bli_store__.media.length === 0) {
+        ensureProductMediaInLibraryInPlace(globalThis.__bli_store__);
+        normalizeMediaInPlace(globalThis.__bli_store__.media);
+      }
+      normalizeSiteSettingsInPlace(globalThis.__bli_store__.settings);
+    } finally {
+      isHydratingStore = false;
+    }
+
+    persistStoreNow();
+  }
+  return globalThis.__bli_store__;
+}
+
+function nextId(prefix: string): string {
+  const s = store();
+  if (prefix === "PRD") return nextEntityId(s.products);
+  if (prefix === "ORD") return nextEntityId(s.orders);
+  if (prefix === "SAL") return nextEntityId(s.sales);
+  if (prefix === "ADM") return nextEntityId(s.accounts);
+  if (prefix === "CPN") return nextEntityId(s.coupons);
+  if (prefix === "REV") return nextEntityId(s.reviews);
+  if (prefix === "USR") return nextEntityId(s.users);
+  if (prefix === "PGE") return nextEntityId(s.pages);
+  if (prefix === "MDA") return nextEntityId(s.media);
+
+  s.seq += 1;
+  return formatEntityId(s.seq);
+}
+
+function canIncludeProduct(product: Product, options: ListProductsOptions = {}): boolean {
+  if (options.onlyTrashed) {
+    return Boolean(product.trashedAt);
+  }
+  if (!options.includeTrashed && product.trashedAt) {
+    return false;
+  }
+  if (!options.includeDrafts && product.publishStatus === "Draft") {
+    return false;
+  }
+  return true;
+}
+
+function canIncludePage(page: Page, options: ListPagesOptions = {}): boolean {
+  if (options.onlyTrashed) {
+    return Boolean(page.trashedAt);
+  }
+  if (!options.includeTrashed && page.trashedAt) {
+    return false;
+  }
+  if (!options.includeDrafts && page.publishStatus === "Draft") {
+    return false;
+  }
+  return true;
+}
+
+export function listProducts(options: ListProductsOptions = {}): Product[] {
+  const products = store().products;
+  return products.filter((product) => canIncludeProduct(product, options)).map(cloneProduct);
+}
+
+export function getProductById(
+  productId: string,
+  options: { includeTrashed?: boolean; includeDrafts?: boolean } = {},
+): Product | null {
+  const target = store().products.find((item) => item.id === productId);
+  if (!target) return null;
+  if (!canIncludeProduct(target, options)) return null;
+
+  return cloneProduct(target);
+}
+
+export function getProductBySlug(
+  slug: string,
+  options: { includeTrashed?: boolean; includeDrafts?: boolean } = {},
+): Product | null {
+  const normalizedSlug = slugify(slug);
+  const target = store().products.find((item) => item.slug === normalizedSlug);
+  if (!target) return null;
+  if (!canIncludeProduct(target, options)) return null;
+
+  return cloneProduct(target);
+}
+
+export function listOrders(): Order[] {
+  return [...store().orders].sort((a, b) => b.id.localeCompare(a.id));
+}
+
+export function listSales(): Sale[] {
+  return [...store().sales].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+export function listAdminAccounts(): AdminAccount[] {
+  return [...store().accounts].sort((a, b) => b.id.localeCompare(a.id));
+}
+
+export function listCoupons(): Coupon[] {
+  return [...store().coupons].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map(cloneCoupon);
+}
+
+export function getCouponByCode(code: string): Coupon | null {
+  const normalized = normalizeCouponCode(code);
+  if (!normalized) return null;
+  const target = store().coupons.find((item) => item.code === normalized && item.isActive);
+  return target ? cloneCoupon(target) : null;
+}
+
+export function applyCoupon(code: string, subtotal: number): CouponApplyResult {
+  const safeSubtotal = money(subtotal);
+  if (!code) return { coupon: null, discount: 0 };
+
+  const coupon = getCouponByCode(code);
+  if (!coupon) {
+    return { coupon: null, discount: 0, error: "Kuponi nuk ekziston ose nuk eshte aktiv." };
+  }
+
+  if (safeSubtotal <= 0) {
+    return { coupon, discount: 0, error: "Subtotal duhet te jete me i madh se 0." };
+  }
+
+  if (safeSubtotal < coupon.minSubtotal) {
+    return {
+      coupon,
+      discount: 0,
+      error: `Kuponi kerkon minimum ${coupon.minSubtotal}.`,
+    };
+  }
+
+  const rawDiscount =
+    coupon.type === "percent" ? (safeSubtotal * coupon.value) / 100 : coupon.value;
+  const discount = Math.min(safeSubtotal, money(rawDiscount));
+
+  return { coupon, discount };
+}
+
+export function addCoupon(input: CouponInput): Coupon | null {
+  const code = normalizeCouponCode(input.code);
+  if (!code) return null;
+  if (store().coupons.some((item) => item.code === code)) return null;
+  if (input.value <= 0) return null;
+
+  const coupon: Coupon = {
+    id: nextId("CPN"),
+    code,
+    description: asSafeString(input.description),
+    type: input.type === "fixed" ? "fixed" : "percent",
+    value: money(input.value),
+    minSubtotal: money(input.minSubtotal ?? 0),
+    isActive: input.isActive ?? true,
+    createdAt: new Date().toISOString().slice(0, 10),
+  };
+
+  if (coupon.type === "percent") {
+    coupon.value = Math.min(100, coupon.value);
+  }
+
+  store().coupons.unshift(coupon);
+  return cloneCoupon(coupon);
+}
+
+export function setCouponStatus(couponId: string, isActive: boolean): Coupon | null {
+  const target = store().coupons.find((item) => item.id === couponId);
+  if (!target) return null;
+  target.isActive = isActive;
+  return cloneCoupon(target);
+}
+
+export function listReviews(options: ListReviewOptions = {}): ProductReview[] {
+  const { productId, status } = options;
+
+  return store()
+    .reviews.filter((review) => {
+      if (productId && review.productId !== productId) return false;
+      if (status && status !== "all" && review.status !== status) return false;
+      if (!status && review.status !== "Approved") return false;
+      return true;
+    })
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .map(cloneReview);
+}
+
+export function addReview(input: ProductReviewInput): ProductReview | null {
+  const productId = asSafeString(input.productId);
+  if (!productId) return null;
+  const product = getProductById(productId, { includeTrashed: true, includeDrafts: true });
+  if (!product) return null;
+
+  const review: ProductReview = {
+    id: nextId("REV"),
+    productId,
+    author: asSafeString(input.author) || "Anonymous",
+    rating: clampInt(input.rating, 1, 5),
+    comment: asSafeString(input.comment),
+    status: input.status ?? "Approved",
+    createdAt: new Date().toISOString().slice(0, 10),
+  };
+
+  store().reviews.unshift(review);
+  return cloneReview(review);
+}
+
+export function updateReviewStatus(reviewId: string, status: ReviewStatus): ProductReview | null {
+  const target = store().reviews.find((item) => item.id === reviewId);
+  if (!target) return null;
+  target.status = status;
+  return cloneReview(target);
+}
+
+export function deleteReview(reviewId: string): boolean {
+  const items = store().reviews;
+  const index = items.findIndex((item) => item.id === reviewId);
+  if (index === -1) return false;
+  items.splice(index, 1);
+  return true;
+}
+
+export function getReviewSummary(productId: string): { average: number; count: number } {
+  const reviews = listReviews({ productId, status: "Approved" });
+  if (reviews.length === 0) return { average: 0, count: 0 };
+  const total = reviews.reduce((sum, review) => sum + review.rating, 0);
+  return {
+    average: Number((total / reviews.length).toFixed(1)),
+    count: reviews.length,
+  };
+}
+
+export function listUsers(): User[] {
+  return [...store().users].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map(cloneUser);
+}
+
+export function getUserById(userId: string): User | null {
+  const target = store().users.find((item) => item.id === userId);
+  return target ? cloneUser(target) : null;
+}
+
+export function findUserByEmail(email: string): User | null {
+  const normalized = toEmail(email);
+  if (!normalized) return null;
+  const target = store().users.find((item) => item.email === normalized);
+  return target ? cloneUser(target) : null;
+}
+
+export function findUserByUsername(username: string): User | null {
+  const normalized = normalizeUsername(username);
+  if (!normalized) return null;
+  const target = store().users.find((item) => item.username === normalized);
+  return target ? cloneUser(target) : null;
+}
+
+export function authenticateUser(identifier: string, password: string): User | null {
+  const safePassword = asSafeString(password);
+  if (!safePassword) return null;
+
+  const byEmail = findUserByEmail(identifier);
+  if (byEmail && byEmail.password === safePassword && byEmail.isActive) {
+    return byEmail;
+  }
+
+  const byUsername = findUserByUsername(identifier);
+  if (byUsername && byUsername.password === safePassword && byUsername.isActive) {
+    return byUsername;
+  }
+
+  return null;
+}
+
+function nextAvailableUsername(
+  users: User[],
+  preferred: string,
+  options: { excludeUserId?: string } = {},
+): string {
+  const taken = new Set(
+    users.filter((item) => item.id !== options.excludeUserId).map((item) => item.username),
+  );
+  return nextUniqueUsername(preferred, taken);
+}
+
+export function addUser(input: UserInput): User | null {
+  const email = toEmail(input.email);
+  const name = asSafeString(input.name);
+  const password = asSafeString(input.password);
+  const source = input.source ?? "Admin";
+  const role = input.role ? normalizeUserRole(input.role) : source === "Checkout" ? "Customer" : "Admin";
+
+  if (!email || !name || password.length < 6) return null;
+  if (findUserByEmail(email)) return null;
+
+  const users = store().users;
+  const username = nextAvailableUsername(users, input.username || usernameFromName(name));
+
+  const user: User = {
+    id: nextId("USR"),
+    name,
+    username,
+    email,
+    password,
+    role,
+    phone: asSafeString(input.phone),
+    city: asSafeString(input.city),
+    address: asSafeString(input.address),
+    source,
+    createdAt: new Date().toISOString().slice(0, 10),
+    isActive: true,
+    passwordResetRequired: false,
+  };
+
+  users.unshift(user);
+  return cloneUser(user);
+}
+
+export function listCustomers(): User[] {
+  return listUsers().filter((user) => user.role === "Customer");
+}
+
+export function updateUser(userId: string, input: UserUpdateInput): User | null {
+  const users = store().users;
+  const target = users.find((item) => item.id === userId);
+  if (!target) return null;
+
+  const email = toEmail(input.email);
+  if (!email) return null;
+  const emailTaken = users.some((item) => item.id !== userId && item.email === email);
+  if (emailTaken) return null;
+
+  const password = asSafeString(input.password);
+  if (password && password.length < 6) return null;
+
+  target.name = asSafeString(input.name);
+  target.email = email;
+  target.username = nextAvailableUsername(
+    users,
+    input.username || usernameFromName(target.name),
+    { excludeUserId: userId },
+  );
+  target.role = normalizeUserRole(input.role);
+  if (password) {
+    target.password = password;
+    target.passwordResetRequired = false;
+  }
+  target.phone = asSafeString(input.phone);
+  target.city = asSafeString(input.city);
+  target.address = asSafeString(input.address);
+
+  return cloneUser(target);
+}
+
+export function canCreateUserRole(actorRole: UserRole, targetRole: UserRole): boolean {
+  const actor = normalizeUserRole(actorRole);
+  const target = normalizeUserRole(targetRole);
+
+  if (actor === "Super Admin") return true;
+  if (actor === "Admin") return target !== "Super Admin";
+  if (actor === "Manager") return target === "Manager" || target === "Customer";
+  return false;
+}
+
+export function canDeleteUser(actorRole: UserRole, targetRole: UserRole): boolean {
+  const normalizedActor = normalizeUserRole(actorRole);
+  const normalizedTarget = normalizeUserRole(targetRole);
+
+  if (normalizedActor === "Customer") return false;
+  if (normalizedActor === "Super Admin") return true;
+  if (normalizedTarget === "Super Admin") return false;
+  return normalizedActor === "Admin" || normalizedActor === "Manager";
+}
+
+export function deleteUser(userId: string, actorRole: UserRole): boolean {
+  const users = store().users;
+  const target = users.find((item) => item.id === userId);
+  if (!target) return false;
+  if (!canDeleteUser(actorRole, target.role)) return false;
+
+  const index = users.findIndex((item) => item.id === userId);
+  if (index === -1) return false;
+  users.splice(index, 1);
+  return true;
+}
+
+export function deactivateUser(userId: string, actorRole: UserRole): boolean {
+  const target = store().users.find((item) => item.id === userId);
+  if (!target) return false;
+  if (!canDeleteUser(actorRole, target.role)) return false;
+
+  target.isActive = false;
+  return true;
+}
+
+export function markUserPasswordResetRequired(userId: string, actorRole: UserRole): boolean {
+  const target = store().users.find((item) => item.id === userId);
+  if (!target) return false;
+  const actor = normalizeUserRole(actorRole);
+  if (actor === "Customer") return false;
+  if (target.role === "Super Admin" && actor !== "Super Admin") return false;
+
+  target.passwordResetRequired = true;
+  return true;
+}
+
+export function bulkDeleteUsers(userIds: string[], actorRole: UserRole): number {
+  const uniqueIds = Array.from(new Set(userIds.map((id) => asSafeString(id)).filter(Boolean)));
+  let deletedCount = 0;
+
+  for (const userId of uniqueIds) {
+    if (deleteUser(userId, actorRole)) {
+      deletedCount += 1;
+    }
+  }
+
+  return deletedCount;
+}
+
+export function bulkDeactivateUsers(userIds: string[], actorRole: UserRole): number {
+  const uniqueIds = Array.from(new Set(userIds.map((id) => asSafeString(id)).filter(Boolean)));
+  let updatedCount = 0;
+
+  for (const userId of uniqueIds) {
+    if (deactivateUser(userId, actorRole)) {
+      updatedCount += 1;
+    }
+  }
+
+  return updatedCount;
+}
+
+export function bulkMarkPasswordResetRequired(userIds: string[], actorRole: UserRole): number {
+  const uniqueIds = Array.from(new Set(userIds.map((id) => asSafeString(id)).filter(Boolean)));
+  let updatedCount = 0;
+
+  for (const userId of uniqueIds) {
+    if (markUserPasswordResetRequired(userId, actorRole)) {
+      updatedCount += 1;
+    }
+  }
+
+  return updatedCount;
+}
+
+export function listPages(options: ListPagesOptions = {}): Page[] {
+  return [...store().pages]
+    .filter((page) => canIncludePage(page, options))
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+    .map(clonePage);
+}
+
+export function getPageById(
+  pageId: string,
+  options: { includeTrashed?: boolean; includeDrafts?: boolean } = {},
+): Page | null {
+  const target = store().pages.find((item) => item.id === pageId);
+  if (!target) return null;
+  if (!canIncludePage(target, options)) return null;
+  return clonePage(target);
+}
+
+export function getPageBySlug(
+  slug: string,
+  options: { includeTrashed?: boolean; includeDrafts?: boolean } = {},
+): Page | null {
+  const normalized = slugify(slug);
+  const target = store().pages.find((item) => item.slug === normalized);
+  if (!target) return null;
+  if (!canIncludePage(target, options)) return null;
+  return clonePage(target);
+}
+
+export function addPage(input: PageInput): Page | null {
+  const name = asSafeString(input.name);
+  if (!name) return null;
+
+  const pages = store().pages;
+  const takenSlugs = new Set(pages.map((page) => page.slug));
+  const baseSlug = slugify(asSafeString(input.slug) || name);
+  const slug = nextUniquePageSlug(baseSlug, takenSlugs);
+  const now = new Date().toISOString().slice(0, 10);
+
+  const page: Page = {
+    id: nextId("PGE"),
+    name,
+    slug,
+    content: asSafeString(input.content),
+    publishStatus: normalizePublicationStatus(input.publishStatus ?? "Draft"),
+    trashedAt: null,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  pages.unshift(page);
+  return clonePage(page);
+}
+
+export function updatePage(pageId: string, input: PageInput): Page | null {
+  const pages = store().pages;
+  const target = pages.find((item) => item.id === pageId);
+  if (!target) return null;
+
+  const name = asSafeString(input.name);
+  if (!name) return null;
+
+  const takenSlugs = new Set(pages.filter((item) => item.id !== pageId).map((item) => item.slug));
+
+  target.name = name;
+  target.slug = nextUniquePageSlug(slugify(asSafeString(input.slug) || name), takenSlugs);
+  target.content = asSafeString(input.content);
+  if (input.publishStatus !== undefined) {
+    target.publishStatus = normalizePublicationStatus(input.publishStatus);
+  }
+  target.updatedAt = new Date().toISOString().slice(0, 10);
+
+  return clonePage(target);
+}
+
+export function trashPage(pageId: string): Page | null {
+  const target = store().pages.find((item) => item.id === pageId);
+  if (!target || target.trashedAt) return null;
+  target.trashedAt = new Date().toISOString();
+  target.updatedAt = new Date().toISOString().slice(0, 10);
+  return clonePage(target);
+}
+
+export function restorePage(pageId: string): Page | null {
+  const target = store().pages.find((item) => item.id === pageId);
+  if (!target || !target.trashedAt) return null;
+  target.trashedAt = null;
+  target.updatedAt = new Date().toISOString().slice(0, 10);
+  return clonePage(target);
+}
+
+export function deletePagePermanently(pageId: string): boolean {
+  const pages = store().pages;
+  const index = pages.findIndex((item) => item.id === pageId);
+  if (index === -1) return false;
+  pages.splice(index, 1);
+  return true;
+}
+
+export function deletePage(pageId: string): boolean {
+  return deletePagePermanently(pageId);
+}
+
+export function setPagePublishStatus(pageId: string, publishStatus: PublicationStatus): Page | null {
+  const target = store().pages.find((item) => item.id === pageId);
+  if (!target) return null;
+  target.publishStatus = normalizePublicationStatus(publishStatus);
+  target.updatedAt = new Date().toISOString().slice(0, 10);
+  return clonePage(target);
+}
+
+export function addProduct(input: ProductInput): Product {
+  const item: Product = {
+    id: nextId("PRD"),
+    name: asSafeString(input.name),
+    category: asSafeString(input.category),
+    description: asSafeString(input.description),
+    image: asSafeString(input.image),
+    gallery: normalizeStringArray(input.gallery),
+    tags: normalizeStringArray(input.tags),
+    slug: asSafeString(input.slug) || asSafeString(input.name),
+    price: input.price,
+    stock: input.stock,
+    publishStatus: normalizePublicationStatus(input.publishStatus ?? "Draft"),
+    trashedAt: null,
+  };
+
+  const s = store();
+  s.products.unshift(item);
+  normalizeProductsInPlace(s.products);
+  ensureProductMediaInLibraryInPlace(s);
+  normalizeMediaInPlace(s.media);
+  return cloneProduct(item);
+}
+
+export function updateProduct(productId: string, input: ProductInput): Product | null {
+  const s = store();
+  const target = s.products.find((item) => item.id === productId);
+  if (!target) return null;
+
+  target.name = asSafeString(input.name);
+  target.category = asSafeString(input.category);
+  target.price = input.price;
+  target.stock = input.stock;
+
+  if (input.slug !== undefined) {
+    target.slug = asSafeString(input.slug) || target.name;
+  }
+  if (input.description !== undefined) {
+    target.description = asSafeString(input.description);
+  }
+  if (input.image !== undefined) {
+    target.image = asSafeString(input.image);
+  }
+  if (input.gallery !== undefined) {
+    target.gallery = normalizeStringArray(input.gallery);
+  }
+  if (input.tags !== undefined) {
+    target.tags = normalizeStringArray(input.tags);
+  }
+  if (input.publishStatus !== undefined) {
+    target.publishStatus = normalizePublicationStatus(input.publishStatus);
+  }
+
+  normalizeProductsInPlace(s.products);
+  ensureProductMediaInLibraryInPlace(s);
+  normalizeMediaInPlace(s.media);
+  return cloneProduct(target);
+}
+
+export function setProductPublishStatus(productId: string, publishStatus: PublicationStatus): Product | null {
+  const target = store().products.find((item) => item.id === productId);
+  if (!target) return null;
+  target.publishStatus = normalizePublicationStatus(publishStatus);
+  return cloneProduct(target);
+}
+
+export function trashProduct(productId: string): Product | null {
+  const target = store().products.find((item) => item.id === productId);
+  if (!target || target.trashedAt) return null;
+
+  target.trashedAt = new Date().toISOString();
+  return cloneProduct(target);
+}
+
+export function restoreProduct(productId: string): Product | null {
+  const target = store().products.find((item) => item.id === productId);
+  if (!target || !target.trashedAt) return null;
+
+  target.trashedAt = null;
+  return cloneProduct(target);
+}
+
+export function deleteProductPermanently(productId: string): boolean {
+  const items = store().products;
+  const index = items.findIndex((item) => item.id === productId);
+  if (index === -1) return false;
+
+  items.splice(index, 1);
+  return true;
+}
+
+export function addOrder(input: {
+  customer: string;
+  productId: string;
+  quantity: number;
+  status: OrderStatus;
+  total?: number;
+  discount?: number;
+  couponCode?: string | null;
+}): Order {
+  const product = store().products.find((item) => item.id === input.productId);
+  const productPrice = product?.price ?? 0;
+  const baseTotal = money(input.quantity * productPrice);
+  const discount = money(input.discount ?? 0);
+  const totalFromInput = input.total !== undefined ? money(input.total) : money(baseTotal - discount);
+
+  const order: Order = {
+    id: nextId("ORD"),
+    customer: asSafeString(input.customer),
+    productId: input.productId,
+    quantity: Math.max(1, Math.floor(input.quantity)),
+    total: totalFromInput,
+    discount,
+    couponCode: input.couponCode ? normalizeCouponCode(input.couponCode) : null,
+    status: input.status,
+    createdAt: new Date().toISOString().slice(0, 10),
+  };
+  store().orders.unshift(order);
+  return order;
+}
+
+export function getOrderById(orderId: string): Order | null {
+  const target = store().orders.find((item) => item.id === orderId);
+  return target ? { ...target } : null;
+}
+
+export function updateOrder(orderId: string, input: OrderUpdateInput): Order | null {
+  const target = store().orders.find((item) => item.id === orderId);
+  if (!target) return null;
+
+  const product = store().products.find((item) => item.id === input.productId);
+  const productPrice = product?.price ?? 0;
+  const quantity = Math.max(1, Math.floor(input.quantity));
+  const baseTotal = money(quantity * productPrice);
+  const discount = money(input.discount ?? 0);
+  const totalFromInput = input.total !== undefined ? money(input.total) : money(baseTotal - discount);
+
+  target.customer = asSafeString(input.customer);
+  target.productId = asSafeString(input.productId);
+  target.quantity = quantity;
+  target.discount = discount;
+  target.total = totalFromInput;
+  target.couponCode = input.couponCode ? normalizeCouponCode(input.couponCode) : null;
+  target.status = input.status;
+
+  return { ...target };
+}
+
+export function updateOrderStatus(orderId: string, status: OrderStatus): void {
+  const target = store().orders.find((item) => item.id === orderId);
+  if (!target) return;
+  target.status = status;
+}
+
+export function bulkUpdateOrderStatus(orderIds: string[], status: OrderStatus): number {
+  const uniqueIds = Array.from(new Set(orderIds.map((id) => asSafeString(id)).filter(Boolean)));
+  let updatedCount = 0;
+
+  for (const orderId of uniqueIds) {
+    const target = store().orders.find((item) => item.id === orderId);
+    if (!target) continue;
+    target.status = status;
+    updatedCount += 1;
+  }
+
+  return updatedCount;
+}
+
+function replaceMediaUrlInProductsInPlace(oldUrl: string, nextUrl: string): void {
+  const safeOld = asSafeString(oldUrl);
+  const safeNext = asSafeString(nextUrl);
+  if (!safeOld || !safeNext || safeOld === safeNext) return;
+
+  for (const product of store().products) {
+    if (product.image === safeOld) {
+      product.image = safeNext;
+    }
+    product.gallery = product.gallery.map((url) => (url === safeOld ? safeNext : url));
+  }
+}
+
+export function listMedia(options: ListMediaOptions = {}): MediaAsset[] {
+  const mediaItems = store().media.filter((media) => {
+    if (options.onlyTrashed) return Boolean(media.trashedAt);
+    if (!options.includeTrashed && media.trashedAt) return false;
+    return true;
+  });
+  return [...mediaItems].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).map(cloneMedia);
+}
+
+export function getMediaById(
+  mediaId: string,
+  options: { includeTrashed?: boolean } = {},
+): MediaAsset | null {
+  const target = store().media.find((item) => item.id === mediaId);
+  if (!target) return null;
+  if (!options.includeTrashed && target.trashedAt) return null;
+  return cloneMedia(target);
+}
+
+export function addMedia(input: MediaInput): MediaAsset | null {
+  const url = asSafeString(input.url);
+  if (!url) return null;
+
+  const s = store();
+  const existing = s.media.find((item) => item.url === url);
+  if (existing) {
+    if (input.alt !== undefined) existing.alt = asSafeString(input.alt);
+    if (input.description !== undefined) existing.description = asSafeString(input.description);
+    if (input.assignedTo !== undefined) {
+      existing.assignedTo = normalizeMediaAssignedTo(input.assignedTo);
+      existing.assignedToId = asSafeString(input.assignedToId) || null;
+    }
+    if (input.uploadedBy !== undefined && !existing.uploadedBy) {
+      existing.uploadedBy = asSafeString(input.uploadedBy) || null;
+    }
+    existing.updatedAt = new Date().toISOString().slice(0, 10);
+    return cloneMedia(existing);
+  }
+
+  const now = new Date().toISOString().slice(0, 10);
+  const media: MediaAsset = {
+    id: nextId("MDA"),
+    url,
+    originalUrl: null,
+    assignedTo: normalizeMediaAssignedTo(input.assignedTo),
+    assignedToId: asSafeString(input.assignedToId) || null,
+    uploadedBy: asSafeString(input.uploadedBy) || null,
+    alt: asSafeString(input.alt),
+    description: asSafeString(input.description),
+    createdAt: now,
+    updatedAt: now,
+    trashedAt: null,
+  };
+  s.media.unshift(media);
+  normalizeMediaInPlace(s.media);
+  return cloneMedia(media);
+}
+
+export function updateMedia(
+  mediaId: string,
+  input: Partial<MediaInput>,
+): MediaAsset | null {
+  const s = store();
+  const target = s.media.find((item) => item.id === mediaId);
+  if (!target) return null;
+
+  const previousUrl = target.url;
+  if (input.url !== undefined) {
+    const nextUrl = asSafeString(input.url);
+    if (nextUrl && nextUrl !== previousUrl && !target.originalUrl) {
+      target.originalUrl = previousUrl;
+    }
+    target.url = nextUrl || target.url;
+  }
+  if (input.alt !== undefined) {
+    target.alt = asSafeString(input.alt);
+  }
+  if (input.description !== undefined) {
+    target.description = asSafeString(input.description);
+  }
+  if (input.assignedTo !== undefined) {
+    target.assignedTo = normalizeMediaAssignedTo(input.assignedTo);
+    target.assignedToId = asSafeString(input.assignedToId) || null;
+  }
+  target.updatedAt = new Date().toISOString().slice(0, 10);
+
+  if (target.url && target.url !== previousUrl) {
+    replaceMediaUrlInProductsInPlace(previousUrl, target.url);
+  }
+
+  normalizeProductsInPlace(s.products);
+  normalizeMediaInPlace(s.media);
+  return cloneMedia(target);
+}
+
+export function trashMedia(mediaId: string): MediaAsset | null {
+  const target = store().media.find((item) => item.id === mediaId);
+  if (!target || target.trashedAt) return null;
+  target.trashedAt = new Date().toISOString();
+  target.updatedAt = new Date().toISOString().slice(0, 10);
+  return cloneMedia(target);
+}
+
+export function restoreMedia(mediaId: string): MediaAsset | null {
+  const target = store().media.find((item) => item.id === mediaId);
+  if (!target || !target.trashedAt) return null;
+  target.trashedAt = null;
+  target.updatedAt = new Date().toISOString().slice(0, 10);
+  return cloneMedia(target);
+}
+
+export function deleteMediaPermanently(mediaId: string): boolean {
+  const mediaItems = store().media;
+  const index = mediaItems.findIndex((item) => item.id === mediaId);
+  if (index === -1) return false;
+  mediaItems.splice(index, 1);
+  return true;
+}
+
+export function addSale(input: Omit<Sale, "id">): Sale {
+  const sale: Sale = { id: nextId("SAL"), ...input };
+  store().sales.unshift(sale);
+  return sale;
+}
+
+export function addAdminAccount(input: Omit<AdminAccount, "id" | "createdAt">): AdminAccount {
+  const account: AdminAccount = {
+    id: nextId("ADM"),
+    ...input,
+    createdAt: new Date().toISOString().slice(0, 10),
+  };
+  store().accounts.unshift(account);
+  return account;
+}
+
+export function dashboardStats() {
+  const products = listProducts().length;
+  const orders = store().orders.length;
+  const paidOrdersValue = store()
+    .orders.filter((item) => item.status === "Paid" || item.status === "Shipped")
+    .reduce((sum, item) => sum + item.total, 0);
+  const sales = store().sales.reduce((sum, item) => sum + item.amount, 0);
+  const accounts = store().accounts.length;
+  const users = store().users.length;
+
+  return {
+    products,
+    orders,
+    totalSales: paidOrdersValue + sales,
+    accounts,
+    users,
+  };
+}
+
+export function findProductNameById(productId: string): string {
+  return store().products.find((item) => item.id === productId)?.name ?? "Unknown Product";
+}
+
+export function getSiteSettings(): SiteSettings {
+  return cloneSiteSettings(store().settings);
+}
+
+export function updateSiteSettings(input: Partial<SiteSettings>): SiteSettings {
+  const target = store().settings;
+
+  if (input.siteTitle !== undefined) {
+    target.siteTitle = asSafeString(input.siteTitle);
+  }
+  if (input.brandName !== undefined) {
+    target.brandName = asSafeString(input.brandName);
+  }
+  if (input.logoUrl !== undefined) {
+    target.logoUrl = asSafeString(input.logoUrl);
+  }
+  if (input.iconUrl !== undefined) {
+    target.iconUrl = asSafeString(input.iconUrl);
+  }
+  if (input.useLogoOnly !== undefined) {
+    target.useLogoOnly = Boolean(input.useLogoOnly);
+  }
+  if (input.headerMenu !== undefined) {
+    target.headerMenu = normalizeHeaderMenu(input.headerMenu);
+  }
+
+  normalizeSiteSettingsInPlace(target);
+  return cloneSiteSettings(target);
+}
