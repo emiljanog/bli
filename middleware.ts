@@ -7,6 +7,20 @@ import {
   resolveAdminRole,
 } from "./lib/admin-auth";
 
+function firstHeaderValue(value: string | null): string | null {
+  if (!value) return null;
+  const first = value.split(",")[0]?.trim();
+  return first || null;
+}
+
+function normalizeForwardedHost(value: string | null): string | null {
+  const first = firstHeaderValue(value);
+  if (!first) return null;
+  const withoutProtocol = first.replace(/^https?:\/\//i, "");
+  const host = withoutProtocol.split("/")[0]?.trim();
+  return host || null;
+}
+
 function toDashboardPath(pathname: string): string {
   return pathname === "/admin" ? "/dashboard" : pathname.replace(/^\/admin/, "/dashboard");
 }
@@ -24,6 +38,22 @@ function withNoStore(response: NextResponse): NextResponse {
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  const sanitizedHeaders = new Headers(request.headers);
+
+  const normalizedOrigin = firstHeaderValue(request.headers.get("origin"));
+  if (normalizedOrigin) {
+    sanitizedHeaders.set("origin", normalizedOrigin);
+  }
+
+  const normalizedForwardedHost = normalizeForwardedHost(request.headers.get("x-forwarded-host"));
+  if (normalizedForwardedHost) {
+    sanitizedHeaders.set("x-forwarded-host", normalizedForwardedHost);
+  }
+
+  const normalizedForwardedProto = firstHeaderValue(request.headers.get("x-forwarded-proto"));
+  if (normalizedForwardedProto) {
+    sanitizedHeaders.set("x-forwarded-proto", normalizedForwardedProto);
+  }
 
   if (pathname === "/user/login" || pathname === "/admin/login") {
     const loginUrl = request.nextUrl.clone();
@@ -90,7 +120,13 @@ export function middleware(request: NextRequest) {
     return withNoStore(NextResponse.redirect(new URL("/dashboard", request.url)));
   }
 
-  return withNoStore(NextResponse.next());
+  return withNoStore(
+    NextResponse.next({
+      request: {
+        headers: sanitizedHeaders,
+      },
+    }),
+  );
 }
 
 export const config = {
