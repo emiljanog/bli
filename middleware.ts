@@ -35,13 +35,15 @@ function isLocalHost(value: string): boolean {
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const search = request.nextUrl.search;
+  const aliasFlag = "__route_alias";
+  const isAliasRequest = request.nextUrl.searchParams.get(aliasFlag) === "1";
   const host = firstHeaderValue(request.headers.get("host"));
   const forwardedHost = firstHeaderValue(request.headers.get("x-forwarded-host"));
   const forwardedProto = firstHeaderValue(request.headers.get("x-forwarded-proto"));
   const isInternalProxyRequest =
     isLocalHost(host) && (!forwardedHost || isLocalHost(forwardedHost));
 
-  if (!isInternalProxyRequest) {
+  if (!isInternalProxyRequest && !isAliasRequest) {
     if (pathname === "/user/login") {
       return NextResponse.redirect(new URL(`/login${search}`, request.url));
     }
@@ -115,15 +117,10 @@ export function middleware(request: NextRequest) {
   }
 
   if (internalPath !== pathname) {
-    if (forwardedHost) {
-      const protocol = forwardedProto || "https";
-      const rewriteTarget = new URL(`${protocol}://${forwardedHost}${internalPath}${search}`);
-      return NextResponse.rewrite(rewriteTarget);
-    }
-
     const rewriteTarget = request.nextUrl.clone();
     rewriteTarget.pathname = internalPath;
     rewriteTarget.search = search;
+    rewriteTarget.searchParams.set(aliasFlag, "1");
     return NextResponse.rewrite(rewriteTarget);
   }
 
