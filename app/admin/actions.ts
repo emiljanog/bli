@@ -317,7 +317,7 @@ export async function updateBrandingSettingsAction(formData: FormData) {
   revalidatePath("/shop");
   revalidatePath("/product");
   revalidatePath("/my-account");
-  revalidatePath("/user/login");
+  revalidatePath("/login");
   revalidateAdminPath("/admin");
   revalidateAdminPath("/admin/settings");
   revalidateAdminPath("/admin/settings/branding");

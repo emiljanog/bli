@@ -29,7 +29,7 @@ export async function AdminShell({ title, description, children }: AdminShellPro
   const siteSettings = getSiteSettings();
 
   if (!isLoggedIn) {
-    redirect("/user/login");
+    redirect("/login");
   }
   if (!canAccessAdmin(adminRole)) {
     redirect("/my-account");
