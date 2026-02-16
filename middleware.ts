@@ -7,30 +7,43 @@ import {
   resolveAdminRole,
 } from "./lib/admin-auth";
 
+function toDashboardPath(pathname: string): string {
+  return pathname === "/admin" ? "/dashboard" : pathname.replace(/^\/admin/, "/dashboard");
+}
+
 function toAdminPath(pathname: string): string {
   return pathname.replace(/^\/dashboard/, "/admin") || "/admin";
 }
 
-function toInternalMyAccountPath(pathname: string): string {
-  return pathname.replace(/^\/my-account/, "/web/my-account");
+function toPublicMyAccountPath(pathname: string): string {
+  return pathname.replace(/^\/web\/my-account/, "/my-account");
 }
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  if (pathname === "/user/login") {
+
+  if (pathname === "/user/login" || pathname === "/admin/login") {
     const loginUrl = request.nextUrl.clone();
     loginUrl.pathname = "/login";
     return NextResponse.redirect(loginUrl);
   }
 
+  if (pathname === "/web/my-account" || pathname.startsWith("/web/my-account/")) {
+    const myAccountUrl = request.nextUrl.clone();
+    myAccountUrl.pathname = toPublicMyAccountPath(pathname);
+    return NextResponse.redirect(myAccountUrl);
+  }
+
+  if (pathname === "/admin" || pathname.startsWith("/admin/")) {
+    const dashboardUrl = request.nextUrl.clone();
+    dashboardUrl.pathname = toDashboardPath(pathname);
+    return NextResponse.redirect(dashboardUrl);
+  }
+
   const internalPath =
     pathname === "/dashboard" || pathname.startsWith("/dashboard/")
       ? toAdminPath(pathname)
-      : pathname === "/my-account" || pathname.startsWith("/my-account/")
-        ? toInternalMyAccountPath(pathname)
-        : pathname === "/login"
-          ? "/admin/login"
-          : pathname;
+      : pathname;
 
   const isLoggedIn =
     request.cookies.get(ADMIN_COOKIE_NAME)?.value === ADMIN_SESSION_VALUE;
@@ -54,23 +67,22 @@ export function middleware(request: NextRequest) {
     prefix === "/admin" ? internalPath === "/admin" : internalPath.startsWith(prefix),
   );
 
-  if (internalPath === "/admin/login" && isLoggedIn) {
+  if (pathname === "/login" && isLoggedIn) {
     return NextResponse.redirect(new URL(isCustomer ? "/my-account" : "/dashboard", request.url));
   }
 
-  if (internalPath.startsWith("/admin") && internalPath !== "/admin/login" && !isLoggedIn) {
+  if (pathname.startsWith("/dashboard") && !isLoggedIn) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("next", pathname);
     return NextResponse.redirect(loginUrl);
   }
 
-  if (internalPath.startsWith("/admin") && internalPath !== "/admin/login" && isLoggedIn && isCustomer) {
+  if (pathname.startsWith("/dashboard") && isLoggedIn && isCustomer) {
     return NextResponse.redirect(new URL("/my-account", request.url));
   }
 
   if (
-    internalPath.startsWith("/admin") &&
-    internalPath !== "/admin/login" &&
+    pathname.startsWith("/dashboard") &&
     isLoggedIn &&
     isManager &&
     !isManagerAllowedPath
