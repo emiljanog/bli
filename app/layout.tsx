@@ -4,6 +4,8 @@ import { AppShell } from "@/components/app-shell";
 import { getSiteSettings } from "@/lib/shop-store";
 import "./globals.css";
 
+export const dynamic = "force-dynamic";
+
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -17,7 +19,7 @@ const geistMono = Geist_Mono({
 export function generateMetadata(): Metadata {
   const site = getSiteSettings();
   const baseTitle = site.siteTitle || "BLI Shop";
-  const icon = site.iconUrl || "/icon.png";
+  const icon = site.iconUrl || "/favicon.ico";
 
   return {
     metadataBase: new URL("https://bli.al"),

@@ -3,10 +3,14 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { AdminShell } from "@/components/admin-shell";
 import { SettingsMenuEditor } from "@/components/settings-menu-editor";
-import { updateBrandingSettingsAction, updateMenuSettingsAction } from "@/app/dashboard/actions";
+import {
+  updateBrandingSettingsAction,
+  updateEmailSettingsAction,
+  updateMenuSettingsAction,
+} from "@/app/dashboard/actions";
 import { canAccessSettings, getAdminRoleFromCookieStore } from "@/lib/admin-auth";
 import { SETTINGS_TABS, getSettingsTab, type SettingsTabSlug } from "@/app/dashboard/settings/settings-tabs";
-import { getSiteSettings } from "@/lib/shop-store";
+import { getSiteSettings, listMedia } from "@/lib/shop-store";
 
 type AdminSettingsTabPageProps = {
   params: Promise<{ tab: string }>;
@@ -16,44 +20,14 @@ function tabHref(slug: SettingsTabSlug): string {
   return `/dashboard/settings/${slug}`;
 }
 
-function renderTabContent(tab: SettingsTabSlug) {
-  if (tab === "general") {
-    return (
-      <div className="grid gap-4 md:grid-cols-2">
-        <label className="space-y-1">
-          <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Store Name</span>
-          <input
-            defaultValue="BLI Store"
-            className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
-          />
-        </label>
-        <label className="space-y-1">
-          <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Support Email</span>
-          <input
-            defaultValue="support@bli.local"
-            className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
-          />
-        </label>
-        <label className="space-y-1">
-          <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Currency</span>
-          <select className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500">
-            <option>EUR</option>
-            <option>USD</option>
-            <option>GBP</option>
-          </select>
-        </label>
-        <label className="space-y-1">
-          <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Timezone</span>
-          <select className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500">
-            <option>Europe/Tirane</option>
-            <option>Europe/Rome</option>
-            <option>UTC</option>
-          </select>
-        </label>
-      </div>
-    );
-  }
+function isImageMediaUrl(url: string): boolean {
+  const value = url.trim().toLowerCase();
+  if (!value) return false;
+  if (value.startsWith("data:image/")) return true;
+  return /\.(svg|png|jpe?g|gif|webp|avif|ico)(\?.*)?$/.test(value);
+}
 
+function renderTabContent(tab: SettingsTabSlug) {
   if (tab === "payments") {
     return (
       <div className="space-y-3">
@@ -86,27 +60,6 @@ function renderTabContent(tab: SettingsTabSlug) {
           </div>
         ))}
         <p className="text-xs font-medium text-slate-500">Tip: set free shipping threshold by zone.</p>
-      </div>
-    );
-  }
-
-  if (tab === "notifications") {
-    return (
-      <div className="space-y-3">
-        {[
-          "Send order confirmation to customer",
-          "Send paid order notification to admin",
-          "Send shipped order email",
-          "Send low stock alerts",
-        ].map((setting) => (
-          <label
-            key={setting}
-            className="flex items-center gap-3 rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700"
-          >
-            <input type="checkbox" defaultChecked className="h-4 w-4 rounded border-slate-300" />
-            {setting}
-          </label>
-        ))}
       </div>
     );
   }
@@ -145,11 +98,28 @@ export default async function AdminSettingsTabPage({ params }: AdminSettingsTabP
   }
 
   const { tab } = await params;
-  const active = getSettingsTab(tab);
+  const normalizedTab = tab.trim().toLowerCase();
+  if (normalizedTab === "branding") {
+    redirect("/dashboard/settings/general");
+  }
+  if (normalizedTab === "notifications") {
+    redirect("/dashboard/settings/emails");
+  }
+
+  const active = getSettingsTab(normalizedTab);
   if (!active) {
     redirect("/dashboard/settings/general");
   }
   const siteSettings = getSiteSettings();
+  const mediaImages = listMedia()
+    .filter((item) => isImageMediaUrl(item.url))
+    .map((item) => ({
+      id: item.id,
+      url: item.url,
+      label: item.alt || item.url,
+    }));
+  const hasLogoMediaMatch = mediaImages.some((item) => item.url === siteSettings.logoUrl);
+  const hasIconMediaMatch = mediaImages.some((item) => item.url === siteSettings.iconUrl);
 
   return (
     <AdminShell title="Settings" description="Configure your store, website and system preferences.">
@@ -176,8 +146,12 @@ export default async function AdminSettingsTabPage({ params }: AdminSettingsTabP
         <h2 className="text-2xl font-semibold text-slate-900">{active.title}</h2>
         <p className="mt-1 text-sm text-slate-600">{active.description}</p>
 
-        {active.slug === "branding" ? (
+        {active.slug === "general" ? (
           <form action={updateBrandingSettingsAction} encType="multipart/form-data" className="mt-5 space-y-5">
+            <p className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+              Defaults are <code>/logo.svg</code> and <code>/favicon.ico</code> from the root web path.
+            </p>
+
             <div className="grid gap-4 md:grid-cols-2">
               <label className="space-y-1">
                 <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Website Title</span>
@@ -237,21 +211,79 @@ export default async function AdminSettingsTabPage({ params }: AdminSettingsTabP
 
             <div className="grid gap-4 md:grid-cols-2">
               <label className="space-y-1">
-                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Icon URL</span>
+                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Upload From Media Gallery
+                </span>
+                <select
+                  name="logoMediaUrl"
+                  defaultValue={hasLogoMediaMatch ? siteSettings.logoUrl : ""}
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+                >
+                  <option value="">Choose image from media</option>
+                  {mediaImages.map((item) => (
+                    <option key={`logo-${item.id}`} value={item.url}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="space-y-1">
+                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Logo SVG/HTML</span>
+                <textarea
+                  name="logoMarkup"
+                  placeholder="<svg ...>...</svg>"
+                  rows={4}
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+                />
+              </label>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className="space-y-1">
+                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Favicon URL</span>
                 <input
                   name="iconUrl"
                   defaultValue={siteSettings.iconUrl}
-                  placeholder="/icon.png or https://..."
+                  placeholder="/favicon.ico or https://..."
                   className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
                 />
               </label>
               <label className="space-y-1">
-                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Upload Icon</span>
+                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Upload Favicon</span>
                 <input
                   name="iconFile"
                   type="file"
                   accept="image/*"
                   className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-slate-200 file:px-3 file:py-1 file:text-xs file:font-semibold"
+                />
+              </label>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className="space-y-1">
+                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Upload Favicon From Media
+                </span>
+                <select
+                  name="iconMediaUrl"
+                  defaultValue={hasIconMediaMatch ? siteSettings.iconUrl : ""}
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+                >
+                  <option value="">Choose image from media</option>
+                  {mediaImages.map((item) => (
+                    <option key={`icon-${item.id}`} value={item.url}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="space-y-1">
+                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Favicon SVG/HTML</span>
+                <textarea
+                  name="iconMarkup"
+                  placeholder="<svg ...>...</svg>"
+                  rows={4}
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
                 />
               </label>
             </div>
@@ -263,7 +295,184 @@ export default async function AdminSettingsTabPage({ params }: AdminSettingsTabP
                 type="submit"
                 className="rounded-xl bg-[#ff8a00] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#ea7f00]"
               >
-                Save Branding
+                Save General Settings
+              </button>
+            </div>
+          </form>
+        ) : active.slug === "emails" ? (
+          <form action={updateEmailSettingsAction} className="mt-5 space-y-5">
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className="space-y-1">
+                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Provider</span>
+                <select
+                  name="emailProvider"
+                  defaultValue={siteSettings.emailProvider}
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+                >
+                  <option value="smtp">SMTP Mail Server</option>
+                  <option value="phpmailer">PHPMailer</option>
+                  <option value="react-email">React Email API</option>
+                </select>
+              </label>
+              <label className="space-y-1">
+                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">From Name</span>
+                <input
+                  name="emailFromName"
+                  defaultValue={siteSettings.emailFromName}
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+                  required
+                />
+              </label>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className="space-y-1">
+                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">From Email</span>
+                <input
+                  name="emailFromAddress"
+                  type="email"
+                  defaultValue={siteSettings.emailFromAddress}
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+                  required
+                />
+              </label>
+              <label className="space-y-1">
+                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Mail Host</span>
+                <input
+                  name="mailHost"
+                  defaultValue={siteSettings.mailHost}
+                  placeholder="smtp.mailserver.local"
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+                />
+              </label>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className="space-y-1">
+                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Mail Port</span>
+                <input
+                  name="mailPort"
+                  type="number"
+                  min={1}
+                  max={65535}
+                  defaultValue={siteSettings.mailPort}
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+                />
+              </label>
+              <label className="space-y-1">
+                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Username</span>
+                <input
+                  name="mailUsername"
+                  defaultValue={siteSettings.mailUsername}
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+                />
+              </label>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className="space-y-1">
+                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Password</span>
+                <input
+                  name="mailPassword"
+                  type="password"
+                  defaultValue={siteSettings.mailPassword}
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+                />
+              </label>
+              <label className="space-y-1">
+                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  PHPMailer Path
+                </span>
+                <input
+                  name="phpMailerPath"
+                  defaultValue={siteSettings.phpMailerPath}
+                  placeholder="/mailer/send.php"
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+                />
+              </label>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className="space-y-1">
+                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  React Email API URL
+                </span>
+                <input
+                  name="reactEmailApiUrl"
+                  defaultValue={siteSettings.reactEmailApiUrl}
+                  placeholder="https://api.yoursite.com/email"
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+                />
+              </label>
+              <label className="space-y-1">
+                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  React Email API Key
+                </span>
+                <input
+                  name="reactEmailApiKey"
+                  defaultValue={siteSettings.reactEmailApiKey}
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+                />
+              </label>
+            </div>
+
+            <label className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+              <input
+                name="mailSecure"
+                type="checkbox"
+                defaultChecked={siteSettings.mailSecure}
+                className="h-4 w-4 rounded border-slate-300"
+              />
+              <span className="text-sm font-semibold text-slate-700">Use SSL/TLS secure connection</span>
+            </label>
+
+            <div className="space-y-3">
+              <label className="flex items-center gap-3 rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700">
+                <input
+                  name="notifyCustomerOrderConfirmation"
+                  type="checkbox"
+                  defaultChecked={siteSettings.notifyCustomerOrderConfirmation}
+                  className="h-4 w-4 rounded border-slate-300"
+                />
+                Send order confirmation to customer
+              </label>
+              <label className="flex items-center gap-3 rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700">
+                <input
+                  name="notifyAdminPaidOrder"
+                  type="checkbox"
+                  defaultChecked={siteSettings.notifyAdminPaidOrder}
+                  className="h-4 w-4 rounded border-slate-300"
+                />
+                Send paid order notification to admin
+              </label>
+              <label className="flex items-center gap-3 rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700">
+                <input
+                  name="notifyShippedOrder"
+                  type="checkbox"
+                  defaultChecked={siteSettings.notifyShippedOrder}
+                  className="h-4 w-4 rounded border-slate-300"
+                />
+                Send shipped order email
+              </label>
+              <label className="flex items-center gap-3 rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700">
+                <input
+                  name="notifyLowStock"
+                  type="checkbox"
+                  defaultChecked={siteSettings.notifyLowStock}
+                  className="h-4 w-4 rounded border-slate-300"
+                />
+                Send low stock alerts
+              </label>
+            </div>
+
+            <input type="hidden" name="redirectTo" value={tabHref(active.slug)} />
+
+            <div className="flex justify-end">
+              <button
+                type="submit"
+                className="rounded-xl bg-[#ff8a00] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#ea7f00]"
+              >
+                Save Email Settings
               </button>
             </div>
           </form>
@@ -276,15 +485,6 @@ export default async function AdminSettingsTabPage({ params }: AdminSettingsTabP
         ) : (
           <>
             <div className="mt-5">{renderTabContent(active.slug)}</div>
-
-            <div className="mt-5 flex justify-end">
-              <button
-                type="button"
-                className="rounded-xl bg-[#ff8a00] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#ea7f00]"
-              >
-                Save Changes
-              </button>
-            </div>
           </>
         )}
       </section>

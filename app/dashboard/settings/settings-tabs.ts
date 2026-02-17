@@ -1,10 +1,9 @@
 export type SettingsTabSlug =
   | "general"
-  | "branding"
-  | "menu"
   | "payments"
   | "shipping"
-  | "notifications"
+  | "emails"
+  | "menu"
   | "security";
 
 export type SettingsTabItem = {
@@ -19,8 +18,8 @@ export const SETTINGS_TABS: SettingsTabItem[] = [
   {
     slug: "general",
     label: "General",
-    title: "Store General",
-    description: "Store name, contact info, currency, and default language settings.",
+    title: "General & Branding",
+    description: "Website title, brand identity, logo, and favicon settings.",
     group: "Store",
   },
   {
@@ -38,11 +37,11 @@ export const SETTINGS_TABS: SettingsTabItem[] = [
     group: "Store",
   },
   {
-    slug: "branding",
-    label: "Branding",
-    title: "Brand Name, Title & Logo",
-    description: "Manage website title, brand name and logos used in frontend and admin.",
-    group: "Store",
+    slug: "emails",
+    label: "Emails & Notifications",
+    title: "Emails & Notifications",
+    description: "Configure SMTP/PHPMailer/React Email and alert toggles for store events.",
+    group: "System",
   },
   {
     slug: "menu",
@@ -50,13 +49,6 @@ export const SETTINGS_TABS: SettingsTabItem[] = [
     title: "Website Menu",
     description: "Manage header/footer menu links and quick navigation labels.",
     group: "Website",
-  },
-  {
-    slug: "notifications",
-    label: "Notifications",
-    title: "Notifications & Emails",
-    description: "Customer/admin email alerts, order status notifications, and templates.",
-    group: "System",
   },
   {
     slug: "security",

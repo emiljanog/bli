@@ -2,7 +2,7 @@
 
 import { Buffer } from "node:buffer";
 import { randomUUID } from "node:crypto";
-import { mkdir } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
@@ -42,6 +42,7 @@ import {
   getProductBySlug,
   getUserById,
   type PublicationStatus,
+  type EmailProvider,
   type Product,
   type ReviewStatus,
   type UserRole,
@@ -74,9 +75,21 @@ function asNumber(input: FormDataEntryValue | null): number {
   return Number.isFinite(value) ? value : 0;
 }
 
+function asInteger(input: FormDataEntryValue | null, fallback: number): number {
+  const value = Math.floor(asNumber(input));
+  return Number.isFinite(value) ? value : fallback;
+}
+
 function asBoolean(input: FormDataEntryValue | null): boolean {
   const value = asString(input).toLowerCase();
   return value === "1" || value === "true" || value === "on" || value === "yes";
+}
+
+function asEmailProvider(input: FormDataEntryValue | null): EmailProvider {
+  const value = asString(input).toLowerCase();
+  if (value === "phpmailer") return "phpmailer";
+  if (value === "react-email") return "react-email";
+  return "smtp";
 }
 
 function asPublicationStatus(input: FormDataEntryValue | null, fallback: PublicationStatus = "Draft"): PublicationStatus {
@@ -153,6 +166,24 @@ async function ensureUploadSubdir(subdir: string): Promise<{ absolute: string; p
     absolute,
     publicBase: `/uploads/${normalizedSubdir}`,
   };
+}
+
+async function asSvgMarkupPublicUrl(
+  input: FormDataEntryValue | null,
+  subdir = "branding",
+): Promise<string | null> {
+  const markup = asString(input);
+  if (!markup) return null;
+  if (markup.length > 200_000) return null;
+
+  const compact = markup.toLowerCase().replace(/\s+/g, " ");
+  if (!compact.includes("<svg") || !compact.includes("</svg>")) return null;
+
+  const uploadDir = await ensureUploadSubdir(subdir);
+  const filename = `${Date.now()}-${randomUUID()}.svg`;
+  const targetPath = path.join(uploadDir.absolute, filename);
+  await writeFile(targetPath, markup, "utf8");
+  return `${uploadDir.publicBase}/${filename}`;
 }
 
 async function bufferToWebpPublicUrl(buffer: Buffer, subdir: string): Promise<string | null> {
@@ -310,16 +341,20 @@ export async function updateBrandingSettingsAction(formData: FormData) {
   const useLogoOnly = asBoolean(formData.get("useLogoOnly"));
   const logoUrlInput = asString(formData.get("logoUrl"));
   const iconUrlInput = asString(formData.get("iconUrl"));
+  const logoMediaUrl = asString(formData.get("logoMediaUrl"));
+  const iconMediaUrl = asString(formData.get("iconMediaUrl"));
   const logoFromUpload = await asImageUploadWebpUrl(formData.get("logoFile"), "branding");
   const iconFromUpload = await asImageUploadWebpUrl(formData.get("iconFile"), "branding");
+  const logoFromMarkup = await asSvgMarkupPublicUrl(formData.get("logoMarkup"), "branding");
+  const iconFromMarkup = await asSvgMarkupPublicUrl(formData.get("iconMarkup"), "branding");
   const redirectTo = asLastString(formData.getAll("redirectTo"));
 
   updateSiteSettings({
     siteTitle,
     brandName,
     useLogoOnly,
-    logoUrl: logoFromUpload ?? logoUrlInput,
-    iconUrl: iconFromUpload ?? iconUrlInput,
+    logoUrl: logoFromUpload ?? logoFromMarkup ?? logoMediaUrl ?? logoUrlInput,
+    iconUrl: iconFromUpload ?? iconFromMarkup ?? iconMediaUrl ?? iconUrlInput,
   });
 
   revalidatePath("/", "layout");
@@ -330,7 +365,34 @@ export async function updateBrandingSettingsAction(formData: FormData) {
   revalidatePath("/login");
   revalidateAdminPath("/admin");
   revalidateAdminPath("/admin/settings");
-  revalidateAdminPath("/admin/settings/branding");
+  revalidateAdminPath("/admin/settings/general");
+
+  redirectToAdminDestination(redirectTo);
+}
+
+export async function updateEmailSettingsAction(formData: FormData) {
+  const redirectTo = asLastString(formData.getAll("redirectTo"));
+
+  updateSiteSettings({
+    emailProvider: asEmailProvider(formData.get("emailProvider")),
+    emailFromName: asString(formData.get("emailFromName")),
+    emailFromAddress: asString(formData.get("emailFromAddress")),
+    mailHost: asString(formData.get("mailHost")),
+    mailPort: asInteger(formData.get("mailPort"), 587),
+    mailSecure: asBoolean(formData.get("mailSecure")),
+    mailUsername: asString(formData.get("mailUsername")),
+    mailPassword: asString(formData.get("mailPassword")),
+    phpMailerPath: asString(formData.get("phpMailerPath")),
+    reactEmailApiUrl: asString(formData.get("reactEmailApiUrl")),
+    reactEmailApiKey: asString(formData.get("reactEmailApiKey")),
+    notifyCustomerOrderConfirmation: asBoolean(formData.get("notifyCustomerOrderConfirmation")),
+    notifyAdminPaidOrder: asBoolean(formData.get("notifyAdminPaidOrder")),
+    notifyShippedOrder: asBoolean(formData.get("notifyShippedOrder")),
+    notifyLowStock: asBoolean(formData.get("notifyLowStock")),
+  });
+
+  revalidateAdminPath("/admin/settings");
+  revalidateAdminPath("/admin/settings/emails");
 
   redirectToAdminDestination(redirectTo);
 }

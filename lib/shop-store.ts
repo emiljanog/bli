@@ -122,6 +122,8 @@ export type SiteMenuItem = {
   href: string;
 };
 
+export type EmailProvider = "smtp" | "phpmailer" | "react-email";
+
 export type SiteSettings = {
   siteTitle: string;
   brandName: string;
@@ -129,6 +131,21 @@ export type SiteSettings = {
   iconUrl: string;
   useLogoOnly: boolean;
   headerMenu: SiteMenuItem[];
+  emailProvider: EmailProvider;
+  emailFromName: string;
+  emailFromAddress: string;
+  mailHost: string;
+  mailPort: number;
+  mailSecure: boolean;
+  mailUsername: string;
+  mailPassword: string;
+  phpMailerPath: string;
+  reactEmailApiUrl: string;
+  reactEmailApiKey: string;
+  notifyCustomerOrderConfirmation: boolean;
+  notifyAdminPaidOrder: boolean;
+  notifyShippedOrder: boolean;
+  notifyLowStock: boolean;
 };
 
 type ProductInput = {
@@ -681,9 +698,24 @@ function defaultSiteSettings(): SiteSettings {
     siteTitle: "BLI Shop",
     brandName: "BLI",
     logoUrl: "/logo.svg",
-    iconUrl: "/icon.png",
+    iconUrl: "/favicon.ico",
     useLogoOnly: false,
     headerMenu: defaultHeaderMenu(),
+    emailProvider: "smtp",
+    emailFromName: "BLI Shop",
+    emailFromAddress: "noreply@bli.local",
+    mailHost: "smtp.mailserver.local",
+    mailPort: 587,
+    mailSecure: false,
+    mailUsername: "",
+    mailPassword: "",
+    phpMailerPath: "",
+    reactEmailApiUrl: "",
+    reactEmailApiKey: "",
+    notifyCustomerOrderConfirmation: true,
+    notifyAdminPaidOrder: true,
+    notifyShippedOrder: true,
+    notifyLowStock: true,
   };
 }
 
@@ -921,11 +953,32 @@ function normalizeSiteSettingsInPlace(settings: SiteSettings): void {
   settings.siteTitle = asSafeString(settings.siteTitle) || "BLI Shop";
   settings.brandName = asSafeString(settings.brandName) || "BLI";
   settings.logoUrl = asSafeString(settings.logoUrl) || "/logo.svg";
-  settings.iconUrl = asSafeString(settings.iconUrl) || settings.logoUrl || "/icon.png";
+  settings.iconUrl = asSafeString(settings.iconUrl) || "/favicon.ico";
   settings.useLogoOnly = Boolean(settings.useLogoOnly);
   settings.headerMenu = Array.isArray(settings.headerMenu)
     ? normalizeHeaderMenu(settings.headerMenu)
     : defaultHeaderMenu();
+  if (
+    settings.emailProvider !== "smtp" &&
+    settings.emailProvider !== "phpmailer" &&
+    settings.emailProvider !== "react-email"
+  ) {
+    settings.emailProvider = "smtp";
+  }
+  settings.emailFromName = asSafeString(settings.emailFromName) || settings.brandName || "BLI Shop";
+  settings.emailFromAddress = toEmail(settings.emailFromAddress) || "noreply@bli.local";
+  settings.mailHost = asSafeString(settings.mailHost) || "smtp.mailserver.local";
+  settings.mailPort = clampInt(settings.mailPort, 1, 65535) || 587;
+  settings.mailSecure = Boolean(settings.mailSecure);
+  settings.mailUsername = asSafeString(settings.mailUsername);
+  settings.mailPassword = asSafeString(settings.mailPassword);
+  settings.phpMailerPath = asSafeString(settings.phpMailerPath);
+  settings.reactEmailApiUrl = asSafeString(settings.reactEmailApiUrl);
+  settings.reactEmailApiKey = asSafeString(settings.reactEmailApiKey);
+  settings.notifyCustomerOrderConfirmation = settings.notifyCustomerOrderConfirmation !== false;
+  settings.notifyAdminPaidOrder = settings.notifyAdminPaidOrder !== false;
+  settings.notifyShippedOrder = settings.notifyShippedOrder !== false;
+  settings.notifyLowStock = settings.notifyLowStock !== false;
 }
 
 function buildSeedProduct(seed: ProductSeed): Product {
@@ -2178,6 +2231,51 @@ export function updateSiteSettings(input: Partial<SiteSettings>): SiteSettings {
   }
   if (input.headerMenu !== undefined) {
     target.headerMenu = normalizeHeaderMenu(input.headerMenu);
+  }
+  if (input.emailProvider !== undefined) {
+    target.emailProvider = input.emailProvider;
+  }
+  if (input.emailFromName !== undefined) {
+    target.emailFromName = asSafeString(input.emailFromName);
+  }
+  if (input.emailFromAddress !== undefined) {
+    target.emailFromAddress = toEmail(input.emailFromAddress);
+  }
+  if (input.mailHost !== undefined) {
+    target.mailHost = asSafeString(input.mailHost);
+  }
+  if (input.mailPort !== undefined) {
+    target.mailPort = Math.max(0, Math.floor(input.mailPort));
+  }
+  if (input.mailSecure !== undefined) {
+    target.mailSecure = Boolean(input.mailSecure);
+  }
+  if (input.mailUsername !== undefined) {
+    target.mailUsername = asSafeString(input.mailUsername);
+  }
+  if (input.mailPassword !== undefined) {
+    target.mailPassword = asSafeString(input.mailPassword);
+  }
+  if (input.phpMailerPath !== undefined) {
+    target.phpMailerPath = asSafeString(input.phpMailerPath);
+  }
+  if (input.reactEmailApiUrl !== undefined) {
+    target.reactEmailApiUrl = asSafeString(input.reactEmailApiUrl);
+  }
+  if (input.reactEmailApiKey !== undefined) {
+    target.reactEmailApiKey = asSafeString(input.reactEmailApiKey);
+  }
+  if (input.notifyCustomerOrderConfirmation !== undefined) {
+    target.notifyCustomerOrderConfirmation = Boolean(input.notifyCustomerOrderConfirmation);
+  }
+  if (input.notifyAdminPaidOrder !== undefined) {
+    target.notifyAdminPaidOrder = Boolean(input.notifyAdminPaidOrder);
+  }
+  if (input.notifyShippedOrder !== undefined) {
+    target.notifyShippedOrder = Boolean(input.notifyShippedOrder);
+  }
+  if (input.notifyLowStock !== undefined) {
+    target.notifyLowStock = Boolean(input.notifyLowStock);
   }
 
   normalizeSiteSettingsInPlace(target);
