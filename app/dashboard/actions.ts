@@ -118,10 +118,19 @@ function normalizeAdminDestination(path: string): string {
   return "";
 }
 
-function redirectToAdminDestination(path: string) {
+function withSuccessNotice(path: string, message: string): string {
+  const [pathname, query = ""] = path.split("?");
+  const params = new URLSearchParams(query);
+  params.set("__ok", "1");
+  params.set("__msg", message);
+  const nextQuery = params.toString();
+  return nextQuery ? `${pathname}?${nextQuery}` : pathname;
+}
+
+function redirectToAdminDestination(path: string, message = "Veprimi u ruajt me sukses.") {
   const normalized = normalizeAdminDestination(path);
   if (normalized) {
-    redirect(normalized);
+    redirect(withSuccessNotice(normalized, message));
   }
 }
 

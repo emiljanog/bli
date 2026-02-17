@@ -1,7 +1,9 @@
 "use client";
 
 import { usePathname } from "next/navigation";
+import { Suspense } from "react";
 import { ReactNode } from "react";
+import { ActionFeedbackToast } from "@/components/action-feedback-toast";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import type { SiteSettings } from "@/lib/shop-store";
@@ -20,11 +22,21 @@ export function AppShell({ children, siteSettings }: AppShellProps) {
     pathname.startsWith("/user/login");
 
   if (isAdminRoute) {
-    return <>{children}</>;
+    return (
+      <>
+        <Suspense fallback={null}>
+          <ActionFeedbackToast />
+        </Suspense>
+        {children}
+      </>
+    );
   }
 
   return (
     <>
+      <Suspense fallback={null}>
+        <ActionFeedbackToast />
+      </Suspense>
       <SiteHeader siteSettings={siteSettings} />
       {children}
       <SiteFooter />
