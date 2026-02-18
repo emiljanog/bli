@@ -94,7 +94,7 @@ export default async function AdminOrdersPage() {
             <input type="hidden" name="redirectTo" value="/dashboard/orders" />
             <button
               type="submit"
-              className="w-full rounded-xl bg-[#ff8a00] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#ea7f00]"
+              className="w-full rounded-xl site-primary-bg px-4 py-2 text-sm font-semibold text-white transition site-primary-bg-hover"
             >
               Save Order
             </button>

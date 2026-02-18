@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { AddToCartButton } from "@/components/add-to-cart-button";
 import { HomeHero } from "@/components/home-hero";
-import { getReviewSummary, listProducts } from "@/lib/shop-store";
+import { getReviewSummary, getSiteSettings, listProducts } from "@/lib/shop-store";
 
 function formatCurrency(amount: number): string {
   return new Intl.NumberFormat("en-US", {
@@ -13,6 +13,7 @@ function formatCurrency(amount: number): string {
 
 export default function Home() {
   const products = listProducts();
+  const siteSettings = getSiteSettings();
   const featuredProducts = products.slice(0, 10);
   const categoryMap = new Map<string, number>();
 
@@ -26,8 +27,13 @@ export default function Home() {
 
   return (
     <main className="text-slate-900">
-      <section className="mx-auto w-[90%] max-w-[1440px] py-10 md:py-14">
-        <HomeHero />
+      <section className="mx-auto w-[90%] max-w-[var(--site-layout-max-width)] py-10 md:py-14">
+        <HomeHero
+          slides={siteSettings.homeSlides}
+          autoplayMs={siteSettings.sliderAutoplayMs}
+          showArrows={siteSettings.sliderShowArrows}
+          showDots={siteSettings.sliderShowDots}
+        />
 
         <section className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {categories.map(([categoryName, count]) => (
@@ -92,7 +98,7 @@ export default function Home() {
                       name={product.name}
                       price={product.price}
                       image={product.image}
-                      className="mt-4 w-full rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700"
+                      className="mt-4 w-full rounded-xl site-primary-bg px-4 py-2 text-sm font-semibold text-white transition site-primary-bg-hover"
                     />
                   </article>
                 );
@@ -109,3 +115,4 @@ export default function Home() {
     </main>
   );
 }
+

@@ -101,6 +101,20 @@ export function middleware(request: NextRequest) {
     );
   }
 
+  if (pathname === "/register" && isLoggedIn) {
+    return withNoStore(
+      NextResponse.redirect(new URL(isCustomer ? "/my-account" : "/dashboard", request.url)),
+    );
+  }
+
+  if (pathname === "/my-account" || pathname.startsWith("/my-account/")) {
+    if (!isLoggedIn) {
+      const loginUrl = new URL("/login", request.url);
+      loginUrl.searchParams.set("next", pathname);
+      return withNoStore(NextResponse.redirect(loginUrl));
+    }
+  }
+
   if (pathname.startsWith("/dashboard") && !isLoggedIn) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("next", pathname);
@@ -136,6 +150,7 @@ export const config = {
     "/my-account/:path*",
     "/web/my-account/:path*",
     "/login",
+    "/register",
     "/user/login",
   ],
 };

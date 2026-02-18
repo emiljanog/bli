@@ -2,13 +2,16 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { AdminShell } from "@/components/admin-shell";
+import { BrandColorField } from "@/components/brand-color-field";
 import { SettingsMenuEditor } from "@/components/settings-menu-editor";
+import { UploadField } from "@/components/upload-field";
 import {
   updateBrandingSettingsAction,
+  updateBrandThemeSettingsAction,
   updateEmailSettingsAction,
   updateMenuSettingsAction,
 } from "@/app/dashboard/actions";
-import { canAccessSettings, getAdminRoleFromCookieStore } from "@/lib/admin-auth";
+import { canAccessSettings, getAdminRoleFromCookieStore, getAdminUsernameFromCookieStore } from "@/lib/admin-auth";
 import { SETTINGS_TABS, getSettingsTab, type SettingsTabSlug } from "@/app/dashboard/settings/settings-tabs";
 import { getSiteSettings, listMedia } from "@/lib/shop-store";
 
@@ -18,13 +21,6 @@ type AdminSettingsTabPageProps = {
 
 function tabHref(slug: SettingsTabSlug): string {
   return `/dashboard/settings/${slug}`;
-}
-
-function isImageMediaUrl(url: string): boolean {
-  const value = url.trim().toLowerCase();
-  if (!value) return false;
-  if (value.startsWith("data:image/")) return true;
-  return /\.(svg|png|jpe?g|gif|webp|avif|ico)(\?.*)?$/.test(value);
 }
 
 function renderTabContent(tab: SettingsTabSlug) {
@@ -93,6 +89,7 @@ function renderTabContent(tab: SettingsTabSlug) {
 export default async function AdminSettingsTabPage({ params }: AdminSettingsTabPageProps) {
   const cookieStore = await cookies();
   const role = getAdminRoleFromCookieStore(cookieStore);
+  const currentUsername = getAdminUsernameFromCookieStore(cookieStore);
   if (!canAccessSettings(role)) {
     redirect("/dashboard");
   }
@@ -111,15 +108,14 @@ export default async function AdminSettingsTabPage({ params }: AdminSettingsTabP
     redirect("/dashboard/settings/general");
   }
   const siteSettings = getSiteSettings();
-  const mediaImages = listMedia()
-    .filter((item) => isImageMediaUrl(item.url))
-    .map((item) => ({
-      id: item.id,
-      url: item.url,
-      label: item.alt || item.url,
-    }));
-  const hasLogoMediaMatch = mediaImages.some((item) => item.url === siteSettings.logoUrl);
-  const hasIconMediaMatch = mediaImages.some((item) => item.url === siteSettings.iconUrl);
+  const mediaImages = listMedia().map((item) => ({
+    id: item.id,
+    url: item.url,
+    label: item.alt || item.url,
+    uploadedBy: item.uploadedBy,
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
+  }));
 
   return (
     <AdminShell title="Settings" description="Configure your store, website and system preferences.">
@@ -133,7 +129,7 @@ export default async function AdminSettingsTabPage({ params }: AdminSettingsTabP
                 href={tabHref(item.slug)}
                 className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
                   isActive
-                    ? "border-[#ff8a00] bg-[#ff8a00] text-white"
+                    ? "site-primary-border site-primary-bg text-white"
                     : "border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
                 }`}
               >
@@ -152,9 +148,9 @@ export default async function AdminSettingsTabPage({ params }: AdminSettingsTabP
               Defaults are <code>/logo.svg</code> and <code>/favicon.ico</code> from the root web path.
             </p>
 
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-4">
               <label className="space-y-1">
-                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Website Title</span>
+                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Site Title</span>
                 <input
                   name="siteTitle"
                   defaultValue={siteSettings.siteTitle}
@@ -163,70 +159,51 @@ export default async function AdminSettingsTabPage({ params }: AdminSettingsTabP
                 />
               </label>
               <label className="space-y-1">
-                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Brand Name</span>
+                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Tagline</span>
                 <input
                   name="brandName"
                   defaultValue={siteSettings.brandName}
+                  placeholder="Shop"
                   className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
-                  required
                 />
-              </label>
-            </div>
-
-            <label className="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-              <input
-                name="useLogoOnly"
-                type="checkbox"
-                defaultChecked={siteSettings.useLogoOnly}
-                className="mt-1 h-4 w-4 rounded border-slate-300"
-              />
-              <span>
-                <span className="text-sm font-semibold text-slate-800">Use only logo</span>
-                <span className="block text-sm text-slate-600">
-                  Hide the brand text in the website header and keep only the logo visible.
+                <span className="block text-xs text-slate-500">
+                  In a few words, explain what this site is about.
                 </span>
-              </span>
-            </label>
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <label className="space-y-1">
-                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Logo URL</span>
-                <input
-                  name="logoUrl"
-                  defaultValue={siteSettings.logoUrl}
-                  placeholder="/logo.svg or https://..."
-                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
-                />
               </label>
-              <label className="space-y-1">
-                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Upload Logo</span>
-                <input
-                  name="logoFile"
-                  type="file"
-                  accept="image/*"
-                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-slate-200 file:px-3 file:py-1 file:text-xs file:font-semibold"
-                />
-              </label>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2">
               <label className="space-y-1">
                 <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Upload From Media Gallery
+                  Site Max Width (px)
                 </span>
-                <select
-                  name="logoMediaUrl"
-                  defaultValue={hasLogoMediaMatch ? siteSettings.logoUrl : ""}
+                <input
+                  name="layoutMaxWidthPx"
+                  type="number"
+                  min={960}
+                  max={2400}
+                  step={10}
+                  defaultValue={siteSettings.layoutMaxWidthPx}
                   className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
-                >
-                  <option value="">Choose image from media</option>
-                  {mediaImages.map((item) => (
-                    <option key={`logo-${item.id}`} value={item.url}>
-                      {item.label}
-                    </option>
-                  ))}
-                </select>
+                />
+                <span className="block text-xs text-slate-500">
+                  This width is used by all public pages for main content containers.
+                </span>
               </label>
+            </div>
+
+            <p className="text-sm font-semibold text-slate-900">Logo</p>
+            <div className="grid gap-4 md:grid-cols-2">
+              <UploadField
+                title="Upload Logo"
+                mediaItems={mediaImages}
+                fileInputName="logoFile"
+                valueInputName="logoSourceUrl"
+                defaultValue={siteSettings.logoUrl}
+                triggerLabel="Upload"
+                currentUsername={currentUsername}
+              />
+              <div />
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
               <label className="space-y-1">
                 <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Logo SVG/HTML</span>
                 <textarea
@@ -236,47 +213,28 @@ export default async function AdminSettingsTabPage({ params }: AdminSettingsTabP
                   className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
                 />
               </label>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2">
               <label className="space-y-1">
-                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Favicon URL</span>
+                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Logo URL (optional)</span>
                 <input
-                  name="iconUrl"
-                  defaultValue={siteSettings.iconUrl}
-                  placeholder="/favicon.ico or https://..."
+                  name="logoUrl"
+                  defaultValue={siteSettings.logoUrl}
+                  placeholder="/logo.svg or https://..."
                   className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
-                />
-              </label>
-              <label className="space-y-1">
-                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Upload Favicon</span>
-                <input
-                  name="iconFile"
-                  type="file"
-                  accept="image/*"
-                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-slate-200 file:px-3 file:py-1 file:text-xs file:font-semibold"
                 />
               </label>
             </div>
 
+            <p className="text-sm font-semibold text-slate-900">Site Icon</p>
             <div className="grid gap-4 md:grid-cols-2">
-              <label className="space-y-1">
-                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Upload Favicon From Media
-                </span>
-                <select
-                  name="iconMediaUrl"
-                  defaultValue={hasIconMediaMatch ? siteSettings.iconUrl : ""}
-                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
-                >
-                  <option value="">Choose image from media</option>
-                  {mediaImages.map((item) => (
-                    <option key={`icon-${item.id}`} value={item.url}>
-                      {item.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <UploadField
+                title="Upload Favicon"
+                mediaItems={mediaImages}
+                fileInputName="iconFile"
+                valueInputName="iconSourceUrl"
+                defaultValue={siteSettings.iconUrl}
+                triggerLabel="Upload"
+                currentUsername={currentUsername}
+              />
               <label className="space-y-1">
                 <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Favicon SVG/HTML</span>
                 <textarea
@@ -288,14 +246,101 @@ export default async function AdminSettingsTabPage({ params }: AdminSettingsTabP
               </label>
             </div>
 
+            <label className="space-y-1">
+              <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Favicon URL (optional)</span>
+              <input
+                name="iconUrl"
+                defaultValue={siteSettings.iconUrl}
+                placeholder="/favicon.ico or https://..."
+                className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+              />
+            </label>
+
             <input type="hidden" name="redirectTo" value={tabHref(active.slug)} />
 
-            <div className="flex justify-end">
+            <div className="flex justify-start py-2">
               <button
                 type="submit"
-                className="rounded-xl bg-[#ff8a00] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#ea7f00]"
+                className="rounded-xl site-primary-bg px-4 py-2 text-sm font-semibold text-white transition site-primary-bg-hover"
               >
                 Save General Settings
+              </button>
+            </div>
+          </form>
+        ) : active.slug === "brand" ? (
+          <form action={updateBrandThemeSettingsAction} className="mt-5 space-y-5">
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className="space-y-1">
+                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Title Font</span>
+                <input
+                  name="titleFont"
+                  defaultValue={siteSettings.titleFont}
+                  placeholder={'"Poppins", sans-serif'}
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+                />
+              </label>
+              <label className="space-y-1">
+                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Text Font</span>
+                <input
+                  name="textFont"
+                  defaultValue={siteSettings.textFont}
+                  placeholder={'"Inter", sans-serif'}
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+                />
+              </label>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className="space-y-1">
+                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Button Font</span>
+                <input
+                  name="buttonFont"
+                  defaultValue={siteSettings.buttonFont}
+                  placeholder={'"Montserrat", sans-serif'}
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+                />
+              </label>
+              <label className="space-y-1">
+                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">UI Font</span>
+                <input
+                  name="uiFont"
+                  defaultValue={siteSettings.uiFont}
+                  placeholder={'"Manrope", sans-serif'}
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+                />
+              </label>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <BrandColorField
+                name="primaryColor"
+                label="Primary Color"
+                defaultValue={siteSettings.primaryColor}
+              />
+              <BrandColorField
+                name="secondaryColor"
+                label="Secondary Color"
+                defaultValue={siteSettings.secondaryColor}
+              />
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <BrandColorField name="accentColor" label="Accent Color" defaultValue={siteSettings.accentColor} />
+              <BrandColorField
+                name="backgroundColor"
+                label="Background Color"
+                defaultValue={siteSettings.backgroundColor}
+              />
+            </div>
+
+            <input type="hidden" name="redirectTo" value={tabHref(active.slug)} />
+
+            <div className="flex justify-start py-2">
+              <button
+                type="submit"
+                className="rounded-xl site-primary-bg px-4 py-2 text-sm font-semibold text-white transition site-primary-bg-hover"
+              >
+                Save Brand Settings
               </button>
             </div>
           </form>
@@ -467,10 +512,10 @@ export default async function AdminSettingsTabPage({ params }: AdminSettingsTabP
 
             <input type="hidden" name="redirectTo" value={tabHref(active.slug)} />
 
-            <div className="flex justify-end">
+            <div className="flex justify-start py-2">
               <button
                 type="submit"
-                className="rounded-xl bg-[#ff8a00] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#ea7f00]"
+                className="rounded-xl site-primary-bg px-4 py-2 text-sm font-semibold text-white transition site-primary-bg-hover"
               >
                 Save Email Settings
               </button>

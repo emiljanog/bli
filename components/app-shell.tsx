@@ -11,14 +11,19 @@ import type { SiteSettings } from "@/lib/shop-store";
 type AppShellProps = {
   children: ReactNode;
   siteSettings: SiteSettings;
+  adminToolbar?: {
+    username: string;
+    displayName: string;
+    avatarUrl: string;
+    profileHref: string;
+  } | null;
 };
 
-export function AppShell({ children, siteSettings }: AppShellProps) {
+export function AppShell({ children, siteSettings, adminToolbar = null }: AppShellProps) {
   const pathname = usePathname();
   const isAdminRoute =
     pathname.startsWith("/admin") ||
     pathname.startsWith("/dashboard") ||
-    pathname.startsWith("/login") ||
     pathname.startsWith("/user/login");
 
   if (isAdminRoute) {
@@ -37,7 +42,7 @@ export function AppShell({ children, siteSettings }: AppShellProps) {
       <Suspense fallback={null}>
         <ActionFeedbackToast />
       </Suspense>
-      <SiteHeader siteSettings={siteSettings} />
+      <SiteHeader siteSettings={siteSettings} adminToolbar={adminToolbar} />
       {children}
       <SiteFooter />
     </>

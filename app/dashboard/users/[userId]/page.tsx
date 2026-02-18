@@ -2,10 +2,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AdminShell } from "@/components/admin-shell";
 import { ConfirmActionForm } from "@/components/confirm-action-form";
+import { UploadField } from "@/components/upload-field";
 import { deactivateUserAction, deleteUserAction, updateUserAction } from "@/app/dashboard/actions";
-import { getAdminRoleFromCookieStore } from "@/lib/admin-auth";
+import { getAdminRoleFromCookieStore, getAdminUsernameFromCookieStore } from "@/lib/admin-auth";
 import { cookies } from "next/headers";
-import { canCreateUserRole, canDeleteUser, getUserById, type UserRole } from "@/lib/shop-store";
+import { canCreateUserRole, canDeleteUser, getUserById, listMedia, type UserRole } from "@/lib/shop-store";
 
 type AdminUserEditPageProps = {
   params: Promise<{ userId: string }>;
@@ -26,6 +27,15 @@ export default async function AdminUserEditPage({ params }: AdminUserEditPagePro
     canCreateUserRole(currentRole, role),
   );
   const roleOptions = isSuperAdminLocked ? (["Super Admin"] as UserRole[]) : editableRoles;
+  const currentUsername = getAdminUsernameFromCookieStore(cookieStore);
+  const mediaImages = listMedia().map((item) => ({
+    id: item.id,
+    url: item.url,
+    label: item.alt || item.url,
+    uploadedBy: item.uploadedBy,
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
+  }));
 
   return (
     <AdminShell title="Edit User" description="Full user edit panel with role and credentials.">
@@ -51,9 +61,9 @@ export default async function AdminUserEditPage({ params }: AdminUserEditPagePro
           ) : null}
 
           <div className="grid gap-3 md:grid-cols-2">
-            <div className="md:col-span-2">
+            <div>
               <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Full Name
+                Name
               </label>
               <input
                 name="name"
@@ -62,6 +72,18 @@ export default async function AdminUserEditPage({ params }: AdminUserEditPagePro
                 disabled={isSuperAdminLocked}
                 className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500 disabled:bg-slate-100 disabled:text-slate-500"
                 required
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Surname
+              </label>
+              <input
+                name="surname"
+                type="text"
+                defaultValue={user.surname}
+                disabled={isSuperAdminLocked}
+                className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500 disabled:bg-slate-100 disabled:text-slate-500"
               />
             </div>
             <div>
@@ -104,6 +126,33 @@ export default async function AdminUserEditPage({ params }: AdminUserEditPagePro
                 disabled={isSuperAdminLocked}
                 className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500 disabled:bg-slate-100 disabled:text-slate-500"
                 required
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Avatar URL
+              </label>
+              <input
+                name="avatarUrl"
+                type="url"
+                defaultValue={user.avatarUrl}
+                disabled={isSuperAdminLocked}
+                placeholder="https://..."
+                className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500 disabled:bg-slate-100 disabled:text-slate-500"
+              />
+            </div>
+            <div>
+              <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Avatar Upload
+              </span>
+              <UploadField
+                title="Upload Avatar"
+                mediaItems={mediaImages}
+                fileInputName="avatarFile"
+                valueInputName="avatarSourceUrl"
+                defaultValue={user.avatarUrl}
+                triggerLabel="Upload avatar"
+                currentUsername={currentUsername}
               />
             </div>
             <div>

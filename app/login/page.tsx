@@ -1,27 +1,40 @@
-import { AdminLoginForm } from "@/components/admin-login-form";
-import { ADMIN_COOKIE_NAME, ADMIN_SESSION_VALUE } from "@/lib/admin-auth";
+import { AuthAccessPanel } from "@/components/auth-access-panel";
+import { ADMIN_COOKIE_NAME, ADMIN_ROLE_COOKIE_NAME, ADMIN_SESSION_VALUE, resolveAdminRole } from "@/lib/admin-auth";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
-export default async function LoginPage() {
+type LoginPageProps = {
+  searchParams?: Promise<{ tab?: string; next?: string }>;
+};
+
+function asTab(value: string | undefined): "login" | "register" {
+  const safe = (value || "").trim().toLowerCase();
+  if (safe === "register") return "register";
+  return "login";
+}
+
+function asNextPath(value: string | undefined): string {
+  const safe = (value || "").trim();
+  if (!safe.startsWith("/") || safe.startsWith("//")) return "/my-account";
+  return safe;
+}
+
+export default async function LoginPage({ searchParams }: LoginPageProps) {
   const cookieStore = await cookies();
   const isLoggedIn = cookieStore.get(ADMIN_COOKIE_NAME)?.value === ADMIN_SESSION_VALUE;
+  const role = resolveAdminRole(cookieStore.get(ADMIN_ROLE_COOKIE_NAME)?.value ?? "Customer");
+  const params = (await searchParams) ?? {};
 
   if (isLoggedIn) {
-    redirect("/dashboard");
+    redirect(role === "Customer" ? "/my-account" : "/dashboard");
   }
 
   return (
-    <main className="relative h-screen overflow-hidden bg-[linear-gradient(180deg,#9fd8ff_0%,#cfeeff_52%,#edf6ff_100%)] text-slate-900">
-      <div className="pointer-events-none absolute inset-x-[-20%] bottom-[-42%] h-[75%] rounded-[100%] border border-white/40" />
-      <div className="pointer-events-none absolute inset-x-[-12%] bottom-[-46%] h-[78%] rounded-[100%] border border-white/30" />
-      <div className="pointer-events-none absolute -bottom-28 left-[-8%] h-64 w-80 rounded-[50%] bg-white/60 blur-xl" />
-      <div className="pointer-events-none absolute -bottom-32 right-[-6%] h-72 w-96 rounded-[50%] bg-white/65 blur-xl" />
-      <div className="pointer-events-none absolute -bottom-20 left-[24%] h-56 w-80 rounded-[50%] bg-white/45 blur-xl" />
-
-      <section className="relative z-10 mx-auto flex h-full w-[92%] max-w-[1440px] items-center justify-center pb-6 pt-4 md:pb-8 md:pt-4">
-        <AdminLoginForm />
+    <main className="text-slate-900">
+      <section className="mx-auto w-[90%] max-w-[var(--site-layout-max-width)] py-10 md:py-14">
+        <AuthAccessPanel initialTab={asTab(params.tab)} nextPath={asNextPath(params.next)} />
       </section>
     </main>
   );
 }
+

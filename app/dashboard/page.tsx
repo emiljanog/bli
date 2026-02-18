@@ -44,7 +44,7 @@ export default async function AdminPage() {
         <article className="rounded-2xl border border-slate-200 bg-white p-5">
           <div className="mb-4 flex items-center justify-between">
             <p className="text-2xl font-semibold">Recent Orders</p>
-            <Link href="/dashboard/orders" className="text-sm font-semibold text-[#ff8a00]">
+            <Link href="/dashboard/orders" className="text-sm font-semibold site-primary-text">
               View all
             </Link>
           </div>
@@ -80,7 +80,7 @@ export default async function AdminPage() {
           <article className="rounded-2xl border border-slate-200 bg-white p-5">
             <div className="mb-3 flex items-center justify-between">
               <p className="text-2xl font-semibold">Top Products</p>
-              <Link href="/dashboard/products" className="text-sm font-semibold text-[#ff8a00]">
+              <Link href="/dashboard/products" className="text-sm font-semibold site-primary-text">
                 Manage
               </Link>
             </div>
@@ -99,7 +99,7 @@ export default async function AdminPage() {
           <article className="rounded-2xl border border-slate-200 bg-white p-5">
             <div className="mb-3 flex items-center justify-between">
               <p className="text-2xl font-semibold">Latest Sales</p>
-              <Link href="/dashboard/sales" className="text-sm font-semibold text-[#ff8a00]">
+              <Link href="/dashboard/sales" className="text-sm font-semibold site-primary-text">
                 Open
               </Link>
             </div>

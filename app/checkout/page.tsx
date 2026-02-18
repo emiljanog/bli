@@ -12,6 +12,16 @@ type CheckoutSuccess = {
   couponCode: string | null;
 };
 
+type CheckoutFields = {
+  customerName: string;
+  email: string;
+  phone: string;
+  address: string;
+  city: string;
+  couponCode: string;
+  password: string;
+};
+
 function formatCurrency(amount: number): string {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
@@ -26,6 +36,16 @@ export default function CheckoutPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState<CheckoutSuccess | null>(null);
   const [createAccount, setCreateAccount] = useState(false);
+  const [isAuthenticatedUser, setIsAuthenticatedUser] = useState(false);
+  const [fields, setFields] = useState<CheckoutFields>({
+    customerName: "",
+    email: "",
+    phone: "",
+    address: "",
+    city: "",
+    couponCode: "",
+    password: "",
+  });
 
   useEffect(() => {
     const syncItems = () => setItems(readCart());
@@ -33,12 +53,59 @@ export default function CheckoutPage() {
     return subscribeCartUpdates(syncItems);
   }, []);
 
+  useEffect(() => {
+    let canceled = false;
+
+    async function loadCurrentUser() {
+      try {
+        const response = await fetch("/api/auth/me", { cache: "no-store" });
+        if (!response.ok) return;
+        const data = (await response.json()) as {
+          authenticated?: boolean;
+          user?: {
+            name?: string;
+            surname?: string;
+            email?: string;
+            phone?: string;
+            city?: string;
+            address?: string;
+          };
+        };
+        if (!data?.authenticated || !data.user || canceled) return;
+
+        const fullName = `${data.user.name ?? ""} ${data.user.surname ?? ""}`.trim();
+        setIsAuthenticatedUser(true);
+        setCreateAccount(false);
+        setFields((prev) => ({
+          ...prev,
+          customerName: fullName || prev.customerName,
+          email: data.user?.email ?? prev.email,
+          phone: data.user?.phone ?? prev.phone,
+          city: data.user?.city ?? prev.city,
+          address: data.user?.address ?? prev.address,
+        }));
+      } catch {
+        // Ignore; checkout still works for guest users.
+      }
+    }
+
+    loadCurrentUser();
+    return () => {
+      canceled = true;
+    };
+  }, []);
+
+  const updateField = (field: keyof CheckoutFields, value: string) => {
+    setFields((prev) => ({ ...prev, [field]: value }));
+  };
+
   const total = useMemo(
     () => items.reduce((sum, item) => sum + item.price * item.quantity, 0),
     [items],
   );
 
-  const handleSubmit = async (formData: FormData) => {
+  const handleSubmit = async (_formData: FormData) => {
+    void _formData;
     if (items.length === 0) {
       setError("Shporta eshte bosh.");
       return;
@@ -48,14 +115,14 @@ export default function CheckoutPage() {
     setError("");
 
     const payload = {
-      customerName: String(formData.get("customerName") ?? "").trim(),
-      email: String(formData.get("email") ?? "").trim(),
-      phone: String(formData.get("phone") ?? "").trim(),
-      address: String(formData.get("address") ?? "").trim(),
-      city: String(formData.get("city") ?? "").trim(),
-      couponCode: String(formData.get("couponCode") ?? "").trim(),
-      createAccount: formData.get("createAccount") === "on",
-      password: String(formData.get("password") ?? "").trim(),
+      customerName: fields.customerName.trim(),
+      email: fields.email.trim(),
+      phone: fields.phone.trim(),
+      address: fields.address.trim(),
+      city: fields.city.trim(),
+      couponCode: fields.couponCode.trim(),
+      createAccount: !isAuthenticatedUser && createAccount,
+      password: fields.password.trim(),
       items,
     };
 
@@ -131,10 +198,10 @@ export default function CheckoutPage() {
                 Vazhdo Shopping
               </Link>
               <Link
-                href="/dashboard/orders"
+                href={isAuthenticatedUser ? "/my-account?tab=orders" : "/dashboard/orders"}
                 className="rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
               >
-                Shiko Orders (Admin)
+                {isAuthenticatedUser ? "Shiko porosite e mia" : "Shiko Orders (Admin)"}
               </Link>
             </div>
           </article>
@@ -145,7 +212,7 @@ export default function CheckoutPage() {
 
   return (
     <main className="text-slate-900">
-      <section className="mx-auto w-[90%] max-w-[1440px] py-10 md:py-14">
+      <section className="mx-auto w-[90%] max-w-[var(--site-layout-max-width)] py-10 md:py-14">
         <div className="mb-8 rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
           <p className="text-sm font-medium text-slate-500">Checkout</p>
           <h1 className="mt-2 text-4xl font-bold">Perfundo blerjen</h1>
@@ -179,12 +246,20 @@ export default function CheckoutPage() {
               className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
             >
               <p className="text-xl font-semibold">Te dhenat e bleresit</p>
+              {isAuthenticatedUser ? (
+                <p className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+                  Te dhenat po merren automatikisht nga account-i yt.
+                </p>
+              ) : null}
               <div className="mt-4 grid gap-3 md:grid-cols-2">
                 <input
                   name="customerName"
                   type="text"
                   placeholder="Emri i plote"
                   required
+                  value={fields.customerName}
+                  onChange={(event) => updateField("customerName", event.target.value)}
+                  readOnly={isAuthenticatedUser}
                   className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
                 />
                 <input
@@ -192,6 +267,9 @@ export default function CheckoutPage() {
                   type="email"
                   placeholder="Email"
                   required
+                  value={fields.email}
+                  onChange={(event) => updateField("email", event.target.value)}
+                  readOnly={isAuthenticatedUser}
                   className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
                 />
                 <input
@@ -199,6 +277,9 @@ export default function CheckoutPage() {
                   type="text"
                   placeholder="Telefoni"
                   required
+                  value={fields.phone}
+                  onChange={(event) => updateField("phone", event.target.value)}
+                  readOnly={isAuthenticatedUser}
                   className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
                 />
                 <input
@@ -206,6 +287,9 @@ export default function CheckoutPage() {
                   type="text"
                   placeholder="Qyteti"
                   required
+                  value={fields.city}
+                  onChange={(event) => updateField("city", event.target.value)}
+                  readOnly={isAuthenticatedUser}
                   className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
                 />
               </div>
@@ -214,32 +298,43 @@ export default function CheckoutPage() {
                 rows={4}
                 placeholder="Adresa e plote"
                 required
+                value={fields.address}
+                onChange={(event) => updateField("address", event.target.value)}
+                readOnly={isAuthenticatedUser}
                 className="mt-3 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
               />
               <input
                 name="couponCode"
                 type="text"
                 placeholder="Coupon code (opsionale)"
+                value={fields.couponCode}
+                onChange={(event) => updateField("couponCode", event.target.value)}
                 className="mt-3 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm uppercase outline-none focus:border-slate-500"
               />
-              <label className="mt-3 flex items-center gap-2 text-sm text-slate-700">
-                <input
-                  name="createAccount"
-                  type="checkbox"
-                  checked={createAccount}
-                  onChange={(event) => setCreateAccount(event.target.checked)}
-                />
-                Krijo account me keto te dhena
-              </label>
-              {createAccount ? (
-                <input
-                  name="password"
-                  type="password"
-                  minLength={6}
-                  required
-                  placeholder="Password (min 6 karaktere)"
-                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
-                />
+              {!isAuthenticatedUser ? (
+                <>
+                  <label className="mt-3 flex items-center gap-2 text-sm text-slate-700">
+                    <input
+                      name="createAccount"
+                      type="checkbox"
+                      checked={createAccount}
+                      onChange={(event) => setCreateAccount(event.target.checked)}
+                    />
+                    Krijo account me keto te dhena
+                  </label>
+                  {createAccount ? (
+                    <input
+                      name="password"
+                      type="password"
+                      minLength={6}
+                      required
+                      value={fields.password}
+                      onChange={(event) => updateField("password", event.target.value)}
+                      placeholder="Password (min 6 karaktere)"
+                      className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+                    />
+                  ) : null}
+                </>
               ) : null}
 
               {error ? (
@@ -284,3 +379,4 @@ export default function CheckoutPage() {
     </main>
   );
 }
+

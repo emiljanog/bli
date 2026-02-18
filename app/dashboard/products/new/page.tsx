@@ -2,7 +2,9 @@ import { AdminProductDescriptionEditor } from "@/components/admin-product-descri
 import { AdminProductMediaEditor } from "@/components/admin-product-media-editor";
 import { AdminShell } from "@/components/admin-shell";
 import { addProductAction } from "@/app/dashboard/actions";
-import { listProducts } from "@/lib/shop-store";
+import { getAdminUsernameFromCookieStore } from "@/lib/admin-auth";
+import { cookies } from "next/headers";
+import { listMedia, listProducts } from "@/lib/shop-store";
 
 const fallbackCategories = [
   "Tech Essentials",
@@ -13,10 +15,20 @@ const fallbackCategories = [
 ];
 
 export default async function AdminNewProductPage() {
+  const cookieStore = await cookies();
+  const currentUsername = getAdminUsernameFromCookieStore(cookieStore);
   const existingCategories = Array.from(
     new Set(listProducts({ includeTrashed: true, includeDrafts: true }).map((product) => product.category)),
   ).sort((a, b) => a.localeCompare(b));
   const categories = existingCategories.length > 0 ? existingCategories : fallbackCategories;
+  const mediaItems = listMedia().map((item) => ({
+    id: item.id,
+    url: item.url,
+    label: item.alt || item.url,
+    uploadedBy: item.uploadedBy,
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
+  }));
 
   return (
     <AdminShell
@@ -149,7 +161,7 @@ export default async function AdminNewProductPage() {
           <article className="rounded-2xl border border-slate-200 bg-white p-4">
             <p className="text-sm font-semibold text-slate-900">Product Media</p>
             <div className="mt-3">
-              <AdminProductMediaEditor />
+              <AdminProductMediaEditor mediaItems={mediaItems} currentUsername={currentUsername} />
             </div>
           </article>
 

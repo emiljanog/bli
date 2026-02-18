@@ -5,11 +5,12 @@ import {
   ADMIN_SESSION_VALUE,
   ADMIN_USERNAME_COOKIE_NAME,
 } from "@/lib/admin-auth";
-import { addUser } from "@/lib/shop-store";
+import { addAdminNotification, addUser } from "@/lib/shop-store";
 
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
   const name = typeof body?.name === "string" ? body.name.trim() : "";
+  const surname = typeof body?.surname === "string" ? body.surname.trim() : "";
   const email = typeof body?.email === "string" ? body.email.trim() : "";
   const password = typeof body?.password === "string" ? body.password : "";
 
@@ -22,6 +23,7 @@ export async function POST(request: NextRequest) {
 
   const createdUser = addUser({
     name,
+    surname,
     email,
     password,
     role: "Customer",
@@ -34,6 +36,13 @@ export async function POST(request: NextRequest) {
       { status: 400 },
     );
   }
+
+  addAdminNotification({
+    type: "User",
+    title: "New user register",
+    message: `${createdUser.name} ${createdUser.surname}`.trim() || createdUser.username,
+    href: `/dashboard/users/${createdUser.id}`,
+  });
 
   const secure = process.env.NODE_ENV === "production";
   const response = NextResponse.json({ ok: true, redirectTo: "/my-account" });

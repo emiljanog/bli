@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, useMemo, useState } from "react";
 
@@ -170,6 +171,13 @@ export function AdminLoginForm() {
       >
         {isSubmitting ? "Signing in..." : "Sign in"}
       </button>
+
+      <p className="mt-4 text-center text-sm text-slate-600">
+        Need an account?{" "}
+        <Link href="/register" className="font-semibold text-slate-900 hover:underline">
+          Register
+        </Link>
+      </p>
 
     </form>
   );

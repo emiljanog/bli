@@ -27,7 +27,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
 
     return (
       <main className="text-slate-900">
-        <section className="mx-auto w-[90%] max-w-[1440px] py-10 md:py-14">
+        <section className="mx-auto w-[90%] max-w-[var(--site-layout-max-width)] py-10 md:py-14">
           <div className="mb-6 flex items-center gap-2 text-sm text-slate-500">
             <Link href="/shop" className="transition hover:text-slate-700">
               Shop
@@ -64,7 +64,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
                   name={bySlug.name}
                   price={bySlug.price}
                   image={bySlug.image}
-                  className="rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-700"
+                  className="rounded-xl site-primary-bg px-5 py-3 text-sm font-semibold text-white transition site-primary-bg-hover"
                 />
                 <Link
                   href="/shop"
@@ -89,3 +89,4 @@ export default async function ProductPage({ params }: ProductPageProps) {
 
   notFound();
 }
+

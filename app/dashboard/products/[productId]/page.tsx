@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { cookies } from "next/headers";
 import { AdminProductDescriptionEditor } from "@/components/admin-product-description-editor";
 import { AdminProductMediaEditor } from "@/components/admin-product-media-editor";
 import { AdminShell } from "@/components/admin-shell";
@@ -9,18 +10,29 @@ import {
   trashProductAction,
   updateProductAction,
 } from "@/app/dashboard/actions";
-import { getProductById, listProducts } from "@/lib/shop-store";
+import { getAdminUsernameFromCookieStore } from "@/lib/admin-auth";
+import { getProductById, listMedia, listProducts } from "@/lib/shop-store";
 
 type AdminProductEditPageProps = {
   params: Promise<{ productId: string }>;
 };
 
 export default async function AdminProductEditPage({ params }: AdminProductEditPageProps) {
+  const cookieStore = await cookies();
+  const currentUsername = getAdminUsernameFromCookieStore(cookieStore);
   const { productId } = await params;
   const product = getProductById(productId, { includeTrashed: true, includeDrafts: true });
   const categories = Array.from(
     new Set(listProducts({ includeTrashed: true, includeDrafts: true }).map((item) => item.category)),
   ).sort((a, b) => a.localeCompare(b));
+  const mediaItems = listMedia().map((item) => ({
+    id: item.id,
+    url: item.url,
+    label: item.alt || item.url,
+    uploadedBy: item.uploadedBy,
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
+  }));
 
   if (!product) {
     notFound();
@@ -179,7 +191,12 @@ export default async function AdminProductEditPage({ params }: AdminProductEditP
           <article className="rounded-2xl border border-slate-200 bg-white p-4">
             <p className="text-sm font-semibold text-slate-900">Product Media</p>
             <div className="mt-3">
-              <AdminProductMediaEditor defaultImage={product.image} defaultGallery={product.gallery} />
+              <AdminProductMediaEditor
+                defaultImage={product.image}
+                defaultGallery={product.gallery}
+                mediaItems={mediaItems}
+                currentUsername={currentUsername}
+              />
             </div>
           </article>
 

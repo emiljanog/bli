@@ -81,7 +81,7 @@ export function SettingsMenuEditor({ initialItems, redirectTo, action }: Setting
             onDragOver={(event) => event.preventDefault()}
             onDrop={() => handleDrop(item.id)}
             className={`grid gap-3 rounded-2xl border bg-slate-50 p-3 md:grid-cols-[auto_1fr_1fr_auto] ${
-              draggingRowId === item.id ? "border-[#ff8a00]" : "border-slate-200"
+              draggingRowId === item.id ? "site-primary-border" : "border-slate-200"
             }`}
           >
             <div className="flex items-center">
@@ -155,7 +155,7 @@ export function SettingsMenuEditor({ initialItems, redirectTo, action }: Setting
         </button>
         <button
           type="submit"
-          className="rounded-xl bg-[#ff8a00] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#ea7f00]"
+          className="rounded-xl site-primary-bg px-4 py-2 text-sm font-semibold text-white transition site-primary-bg-hover"
         >
           Save Menu
         </button>

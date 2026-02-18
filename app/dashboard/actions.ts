@@ -25,6 +25,8 @@ import {
   addProduct,
   addSale,
   addUser,
+  addSupportTicketReply,
+  markAllAdminNotificationsAsRead,
   bulkDeactivateUsers,
   bulkDeleteUsers,
   bulkMarkPasswordResetRequired,
@@ -34,6 +36,7 @@ import {
   deactivateUser,
   deleteMediaPermanently,
   deletePagePermanently,
+  deleteSupportTicket,
   deleteUser,
   deleteReview,
   deleteProductPermanently,
@@ -43,6 +46,7 @@ import {
   getUserById,
   type PublicationStatus,
   type EmailProvider,
+  type HomeSliderItem,
   type Product,
   type ReviewStatus,
   type UserRole,
@@ -53,6 +57,7 @@ import {
   setProductPublishStatus,
   type OrderStatus,
   setCouponStatus,
+  setSupportTicketStatus,
   trashMedia,
   trashPage,
   trashProduct,
@@ -64,6 +69,7 @@ import {
   updateProduct,
   updatePage,
   updateOrderStatus,
+  type SupportTicketStatus,
 } from "@/lib/shop-store";
 
 function asString(input: FormDataEntryValue | null): string {
@@ -111,6 +117,21 @@ function asList(input: FormDataEntryValue | null): string[] {
     .split(/\r?\n|,/)
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+function asJsonArray(input: FormDataEntryValue | null): unknown[] {
+  const raw = asString(input);
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function asHomeSliderItems(input: FormDataEntryValue | null): HomeSliderItem[] {
+  return asJsonArray(input).filter((item) => typeof item === "object" && item !== null) as HomeSliderItem[];
 }
 
 function asLastString(values: FormDataEntryValue[]): string {
@@ -284,6 +305,11 @@ function revalidateMediaPaths(mediaId?: string) {
   }
 }
 
+function revalidateSupportTicketPaths() {
+  revalidateAdminPath("/admin/help-tickets");
+  revalidatePath("/my-account");
+}
+
 function uniqueNonEmptyUrls(values: Array<string | null | undefined>): string[] {
   return Array.from(
     new Set(
@@ -338,9 +364,11 @@ export async function logoutAdminAction() {
 export async function updateBrandingSettingsAction(formData: FormData) {
   const siteTitle = asString(formData.get("siteTitle"));
   const brandName = asString(formData.get("brandName"));
-  const useLogoOnly = asBoolean(formData.get("useLogoOnly"));
+  const layoutMaxWidthPx = asInteger(formData.get("layoutMaxWidthPx"), 1440);
   const logoUrlInput = asString(formData.get("logoUrl"));
   const iconUrlInput = asString(formData.get("iconUrl"));
+  const logoSourceUrl = asString(formData.get("logoSourceUrl"));
+  const iconSourceUrl = asString(formData.get("iconSourceUrl"));
   const logoMediaUrl = asString(formData.get("logoMediaUrl"));
   const iconMediaUrl = asString(formData.get("iconMediaUrl"));
   const logoFromUpload = await asImageUploadWebpUrl(formData.get("logoFile"), "branding");
@@ -348,13 +376,17 @@ export async function updateBrandingSettingsAction(formData: FormData) {
   const logoFromMarkup = await asSvgMarkupPublicUrl(formData.get("logoMarkup"), "branding");
   const iconFromMarkup = await asSvgMarkupPublicUrl(formData.get("iconMarkup"), "branding");
   const redirectTo = asLastString(formData.getAll("redirectTo"));
+  const finalLogoUrl = logoFromUpload ?? logoFromMarkup ?? logoSourceUrl ?? logoMediaUrl ?? logoUrlInput;
+  const finalIconUrl = iconFromUpload ?? iconFromMarkup ?? iconSourceUrl ?? iconMediaUrl ?? iconUrlInput;
 
   updateSiteSettings({
     siteTitle,
     brandName,
-    useLogoOnly,
-    logoUrl: logoFromUpload ?? logoFromMarkup ?? logoMediaUrl ?? logoUrlInput,
-    iconUrl: iconFromUpload ?? iconFromMarkup ?? iconMediaUrl ?? iconUrlInput,
+    layoutMaxWidthPx,
+    useLogoOnly: Boolean(finalLogoUrl),
+    logoUrl: finalLogoUrl,
+    iconUrl: finalIconUrl,
+    brandingVersion: Date.now(),
   });
 
   revalidatePath("/", "layout");
@@ -397,6 +429,29 @@ export async function updateEmailSettingsAction(formData: FormData) {
   redirectToAdminDestination(redirectTo);
 }
 
+export async function updateBrandThemeSettingsAction(formData: FormData) {
+  const redirectTo = asLastString(formData.getAll("redirectTo"));
+
+  updateSiteSettings({
+    titleFont: asString(formData.get("titleFont")),
+    textFont: asString(formData.get("textFont")),
+    buttonFont: asString(formData.get("buttonFont")),
+    uiFont: asString(formData.get("uiFont")),
+    primaryColor: asString(formData.get("primaryColor")),
+    secondaryColor: asString(formData.get("secondaryColor")),
+    accentColor: asString(formData.get("accentColor")),
+    backgroundColor: asString(formData.get("backgroundColor")),
+  });
+
+  revalidatePath("/", "layout");
+  revalidatePath("/");
+  revalidateAdminPath("/admin");
+  revalidateAdminPath("/admin/settings");
+  revalidateAdminPath("/admin/settings/brand");
+
+  redirectToAdminDestination(redirectTo);
+}
+
 export async function updateMenuSettingsAction(formData: FormData) {
   const labels = formData.getAll("menuLabel");
   const hrefs = formData.getAll("menuHref");
@@ -420,6 +475,24 @@ export async function updateMenuSettingsAction(formData: FormData) {
   revalidatePath("/my-account");
   revalidateAdminPath("/admin/settings");
   revalidateAdminPath("/admin/settings/menu");
+
+  redirectToAdminDestination(redirectTo);
+}
+
+export async function updateHomeSliderSettingsAction(formData: FormData) {
+  const redirectTo = asLastString(formData.getAll("redirectTo"));
+
+  updateSiteSettings({
+    homeSlides: asHomeSliderItems(formData.get("slidesPayload")),
+    sliderAutoplayMs: asInteger(formData.get("sliderAutoplayMs"), 4500),
+    sliderShowArrows: asBoolean(formData.get("sliderShowArrows")),
+    sliderShowDots: asBoolean(formData.get("sliderShowDots")),
+  });
+
+  revalidatePath("/", "layout");
+  revalidatePath("/");
+  revalidateAdminPath("/admin");
+  revalidateAdminPath("/admin/slider");
 
   redirectToAdminDestination(redirectTo);
 }
@@ -824,6 +897,54 @@ export async function bulkOrderAction(formData: FormData) {
   redirectToAdminDestination(redirectTo);
 }
 
+export async function replySupportTicketAction(formData: FormData) {
+  const cookieStore = await cookies();
+  const actor = getAdminUsernameFromCookieStore(cookieStore) || "admin";
+  const ticketId = asString(formData.get("ticketId"));
+  const message = asString(formData.get("message"));
+  const redirectTo = asLastString(formData.getAll("redirectTo"));
+  if (!ticketId || !message) return;
+
+  addSupportTicketReply(ticketId, actor, message);
+  revalidateSupportTicketPaths();
+  redirectToAdminDestination(redirectTo, "Ticket reply saved.");
+}
+
+export async function setSupportTicketStatusAction(formData: FormData) {
+  const ticketId = asString(formData.get("ticketId"));
+  const statusRaw = asString(formData.get("status"));
+  const redirectTo = asLastString(formData.getAll("redirectTo"));
+  if (!ticketId) return;
+
+  const status: SupportTicketStatus = statusRaw === "Closed" ? "Closed" : "Open";
+  setSupportTicketStatus(ticketId, status);
+  revalidateSupportTicketPaths();
+  redirectToAdminDestination(redirectTo, "Ticket status updated.");
+}
+
+export async function deleteSupportTicketAction(formData: FormData) {
+  const cookieStore = await cookies();
+  const currentRole = getAdminRoleFromCookieStore(cookieStore);
+  if (currentRole !== "Super Admin") return;
+
+  const ticketId = asString(formData.get("ticketId"));
+  const redirectTo = asLastString(formData.getAll("redirectTo"));
+  if (!ticketId) return;
+
+  deleteSupportTicket(ticketId);
+  revalidateSupportTicketPaths();
+  redirectToAdminDestination(redirectTo, "Ticket deleted.");
+}
+
+export async function markAllNotificationsReadAction() {
+  const updated = markAllAdminNotificationsAsRead();
+  if (updated > 0) {
+    revalidatePath("/dashboard", "layout");
+    revalidatePath("/dashboard/orders");
+    revalidatePath("/dashboard/help-tickets");
+  }
+}
+
 export async function addMediaAction(formData: FormData) {
   const cookieStore = await cookies();
   const uploadedBy = getAdminUsernameFromCookieStore(cookieStore) || "admin";
@@ -963,9 +1084,14 @@ export async function registerUserAction(formData: FormData) {
   const cookieStore = await cookies();
   const currentRole = getAdminRoleFromCookieStore(cookieStore) as UserRole;
   const name = asString(formData.get("name"));
+  const surname = asString(formData.get("surname"));
   const username = asString(formData.get("username"));
   const email = asString(formData.get("email"));
   const password = asString(formData.get("password"));
+  const avatarUrlInput = asString(formData.get("avatarUrl"));
+  const avatarSourceUrl = asString(formData.get("avatarSourceUrl"));
+  const avatarFromUpload = await asImageUploadWebpUrl(formData.get("avatarFile"), "users");
+  const avatarUrl = avatarFromUpload ?? avatarSourceUrl ?? avatarUrlInput;
   const role = asString(formData.get("role")) as UserRole;
   const phone = asString(formData.get("phone"));
   const city = asString(formData.get("city"));
@@ -978,9 +1104,11 @@ export async function registerUserAction(formData: FormData) {
 
   addUser({
     name,
+    surname,
     username,
     email,
     password,
+    avatarUrl,
     role: safeRole,
     phone,
     city,
@@ -1000,9 +1128,14 @@ export async function updateUserAction(formData: FormData) {
   const currentRole = getAdminRoleFromCookieStore(cookieStore) as UserRole;
   const userId = asString(formData.get("userId"));
   const name = asString(formData.get("name"));
+  const surname = asString(formData.get("surname"));
   const username = asString(formData.get("username"));
   const email = asString(formData.get("email"));
   const password = asString(formData.get("password"));
+  const avatarUrlInput = asString(formData.get("avatarUrl"));
+  const avatarSourceUrl = asString(formData.get("avatarSourceUrl"));
+  const avatarFromUpload = await asImageUploadWebpUrl(formData.get("avatarFile"), "users");
+  const avatarUrl = avatarFromUpload ?? avatarSourceUrl ?? avatarUrlInput;
   const role = asString(formData.get("role")) as UserRole;
   const phone = asString(formData.get("phone"));
   const city = asString(formData.get("city"));
@@ -1018,9 +1151,11 @@ export async function updateUserAction(formData: FormData) {
 
   updateUser(userId, {
     name,
+    surname,
     username,
     email,
     password,
+    avatarUrl,
     role,
     phone,
     city,

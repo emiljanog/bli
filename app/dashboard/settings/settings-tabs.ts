@@ -1,5 +1,6 @@
 export type SettingsTabSlug =
   | "general"
+  | "brand"
   | "payments"
   | "shipping"
   | "emails"
@@ -21,6 +22,13 @@ export const SETTINGS_TABS: SettingsTabItem[] = [
     title: "General & Branding",
     description: "Website title, brand identity, logo, and favicon settings.",
     group: "Store",
+  },
+  {
+    slug: "brand",
+    label: "Branding & Theme",
+    title: "Branding Typography & Color System",
+    description: "Configure fonts and brand colors used across website and dashboard.",
+    group: "Website",
   },
   {
     slug: "payments",

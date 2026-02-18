@@ -229,7 +229,7 @@ export function AdminPagesTable({ pages }: AdminPagesTableProps) {
           }}
           className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
             pageFilter === "published"
-              ? "border-[#ff8a00] bg-[#ff8a00] text-white"
+              ? "site-primary-border site-primary-bg text-white"
               : "border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
           }`}
         >
@@ -243,7 +243,7 @@ export function AdminPagesTable({ pages }: AdminPagesTableProps) {
           }}
           className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
             pageFilter === "draft"
-              ? "border-[#ff8a00] bg-[#ff8a00] text-white"
+              ? "site-primary-border site-primary-bg text-white"
               : "border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
           }`}
         >
@@ -257,7 +257,7 @@ export function AdminPagesTable({ pages }: AdminPagesTableProps) {
           }}
           className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
             pageFilter === "trash"
-              ? "border-[#ff8a00] bg-[#ff8a00] text-white"
+              ? "site-primary-border site-primary-bg text-white"
               : "border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
           }`}
         >

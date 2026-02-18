@@ -1,6 +1,8 @@
 import { revalidatePath } from "next/cache";
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { addOrder, addProduct, addSale, addUser, applyCoupon, listProducts } from "@/lib/shop-store";
+import { ADMIN_COOKIE_NAME, ADMIN_SESSION_VALUE, ADMIN_USERNAME_COOKIE_NAME } from "@/lib/admin-auth";
+import { addOrder, addProduct, addSale, addUser, applyCoupon, findUserByUsername, listProducts } from "@/lib/shop-store";
 
 type CheckoutItem = {
   id: string;
@@ -43,16 +45,32 @@ function parseItems(input: unknown): CheckoutItem[] {
 
 export async function POST(request: Request) {
   try {
+    const cookieStore = await cookies();
     const body = (await request.json()) as Record<string, unknown>;
-    const customerName = asString(body.customerName);
-    const email = asString(body.email);
-    const phone = asString(body.phone);
-    const address = asString(body.address);
-    const city = asString(body.city);
+    const customerNameInput = asString(body.customerName);
+    const emailInput = asString(body.email);
+    const phoneInput = asString(body.phone);
+    const addressInput = asString(body.address);
+    const cityInput = asString(body.city);
     const couponCode = asString(body.couponCode);
     const createAccount = asBoolean(body.createAccount);
     const password = asString(body.password);
     const items = parseItems(body.items);
+
+    const isLoggedIn = cookieStore.get(ADMIN_COOKIE_NAME)?.value === ADMIN_SESSION_VALUE;
+    const sessionUsername = isLoggedIn ? asString(cookieStore.get(ADMIN_USERNAME_COOKIE_NAME)?.value ?? "") : "";
+    const authenticatedUser = sessionUsername ? findUserByUsername(sessionUsername) : null;
+    const activeAuthenticatedUser =
+      authenticatedUser && authenticatedUser.isActive ? authenticatedUser : null;
+
+    const customerName = activeAuthenticatedUser
+      ? `${activeAuthenticatedUser.name} ${activeAuthenticatedUser.surname}`.trim() ||
+        activeAuthenticatedUser.username
+      : customerNameInput;
+    const email = activeAuthenticatedUser ? activeAuthenticatedUser.email : emailInput;
+    const phone = activeAuthenticatedUser?.phone || phoneInput;
+    const address = activeAuthenticatedUser?.address || addressInput;
+    const city = activeAuthenticatedUser?.city || cityInput;
 
     if (!customerName || !email || !phone || !address || !city || items.length === 0) {
       return NextResponse.json(
@@ -61,7 +79,7 @@ export async function POST(request: Request) {
       );
     }
 
-    if (createAccount && password.length < 6) {
+    if (!activeAuthenticatedUser && createAccount && password.length < 6) {
       return NextResponse.json(
         { error: "Password duhet te jete te pakten 6 karaktere per regjistrim." },
         { status: 400 },
@@ -75,9 +93,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: couponResult.error }, { status: 400 });
     }
 
-    if (createAccount) {
+    let orderUserId: string | null = activeAuthenticatedUser?.id ?? null;
+    if (!orderUserId && createAccount) {
+      const [firstName, ...surnameParts] = customerName.split(/\s+/).filter(Boolean);
       const createdUser = addUser({
-        name: customerName,
+        name: firstName || customerName,
+        surname: surnameParts.join(" "),
         email,
         password,
         phone,
@@ -95,6 +116,8 @@ export async function POST(request: Request) {
           { status: 400 },
         );
       }
+
+      orderUserId = createdUser.id;
     }
 
     const discount = couponResult.discount;
@@ -128,6 +151,7 @@ export async function POST(request: Request) {
 
       addOrder({
         customer: customerName,
+        userId: orderUserId,
         productId,
         quantity: item.quantity,
         total: itemTotal,

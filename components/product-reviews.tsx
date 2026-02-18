@@ -122,7 +122,7 @@ export function ProductReviews({ productId, initialReviews }: ProductReviewsProp
         <button
           type="submit"
           disabled={isSubmitting}
-          className="mt-3 rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:bg-slate-500"
+          className="mt-3 rounded-xl site-primary-bg px-4 py-2 text-sm font-semibold text-white transition site-primary-bg-hover disabled:cursor-not-allowed disabled:bg-slate-500"
         >
           {isSubmitting ? "Duke ruajtur..." : "Posto Review"}
         </button>

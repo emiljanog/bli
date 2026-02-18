@@ -68,7 +68,7 @@ export default async function AdminCustomersPage() {
             </p>
             <Link
               href="/dashboard/users"
-              className="mt-4 inline-block rounded-xl bg-[#ff8a00] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#ea7f00]"
+              className="mt-4 inline-block rounded-xl site-primary-bg px-4 py-2 text-sm font-semibold text-white transition site-primary-bg-hover"
             >
               Open Users
             </Link>

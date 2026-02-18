@@ -22,6 +22,7 @@ export type PublicationStatus = "Published" | "Draft";
 export type Order = {
   id: string;
   customer: string;
+  userId?: string | null;
   productId: string;
   quantity: number;
   total: number;
@@ -77,9 +78,11 @@ export type UserRole = "Super Admin" | "Admin" | "Manager" | "Customer";
 export type User = {
   id: string;
   name: string;
+  surname: string;
   username: string;
   email: string;
   password: string;
+  avatarUrl: string;
   role: UserRole;
   phone: string;
   city: string;
@@ -122,15 +125,88 @@ export type SiteMenuItem = {
   href: string;
 };
 
+export type HomeSliderPreset = "sunset" | "ocean" | "forest" | "violet" | "sunrise";
+
+export type HomeSliderItem = {
+  id: string;
+  badge: string;
+  title: string;
+  description: string;
+  ctaPrimary: string;
+  ctaPrimaryHref: string;
+  ctaSecondary: string;
+  ctaSecondaryHref: string;
+  imageUrl: string;
+  gradientPreset: HomeSliderPreset;
+};
+
 export type EmailProvider = "smtp" | "phpmailer" | "react-email";
+
+export type SupportTicketStatus = "Open" | "Closed";
+export type AdminNotificationType = "Order" | "Ticket" | "User";
+
+export type SupportTicketReply = {
+  id: string;
+  by: string;
+  message: string;
+  createdAt: string;
+};
+
+export type AdminNotification = {
+  id: string;
+  type: AdminNotificationType;
+  title: string;
+  message: string;
+  href: string;
+  createdAt: string;
+  isRead: boolean;
+};
+
+export type PasswordResetToken = {
+  id: string;
+  userId: string;
+  username: string;
+  email: string;
+  token: string;
+  createdAt: string;
+  expiresAt: string;
+  usedAt: string | null;
+};
+
+export type SupportTicket = {
+  id: string;
+  userId: string;
+  username: string;
+  email: string;
+  subject: string;
+  message: string;
+  replies: SupportTicketReply[];
+  status: SupportTicketStatus;
+  createdAt: string;
+  updatedAt: string;
+};
 
 export type SiteSettings = {
   siteTitle: string;
   brandName: string;
+  layoutMaxWidthPx: number;
   logoUrl: string;
   iconUrl: string;
+  brandingVersion: number;
   useLogoOnly: boolean;
   headerMenu: SiteMenuItem[];
+  homeSlides: HomeSliderItem[];
+  sliderAutoplayMs: number;
+  sliderShowArrows: boolean;
+  sliderShowDots: boolean;
+  titleFont: string;
+  textFont: string;
+  buttonFont: string;
+  uiFont: string;
+  primaryColor: string;
+  secondaryColor: string;
+  accentColor: string;
+  backgroundColor: string;
   emailProvider: EmailProvider;
   emailFromName: string;
   emailFromAddress: string;
@@ -180,9 +256,11 @@ type ProductReviewInput = {
 
 type UserInput = {
   name: string;
+  surname?: string;
   username?: string;
   email: string;
   password: string;
+  avatarUrl?: string;
   role?: UserRole;
   phone?: string;
   city?: string;
@@ -192,9 +270,11 @@ type UserInput = {
 
 type UserUpdateInput = {
   name: string;
+  surname?: string;
   username?: string;
   email: string;
   password?: string;
+  avatarUrl?: string;
   role: UserRole;
   phone?: string;
   city?: string;
@@ -266,6 +346,9 @@ type Store = {
   users: User[];
   pages: Page[];
   media: MediaAsset[];
+  supportTickets: SupportTicket[];
+  adminNotifications: AdminNotification[];
+  passwordResetTokens: PasswordResetToken[];
   settings: SiteSettings;
 };
 
@@ -335,6 +418,7 @@ function mergePersistedSettings(base: SiteSettings, input: unknown): SiteSetting
     ...base,
     ...draft,
     headerMenu: Array.isArray(draft.headerMenu) ? draft.headerMenu : base.headerMenu,
+    homeSlides: Array.isArray(draft.homeSlides) ? draft.homeSlides : base.homeSlides,
   };
 }
 
@@ -354,6 +438,9 @@ function mergePersistedStore(base: Store, input: unknown): Store {
     users: Array.isArray(draft.users) ? draft.users : base.users,
     pages: Array.isArray(draft.pages) ? draft.pages : base.pages,
     media: Array.isArray(draft.media) ? draft.media : base.media,
+    supportTickets: Array.isArray(draft.supportTickets) ? draft.supportTickets : base.supportTickets,
+    adminNotifications: Array.isArray(draft.adminNotifications) ? draft.adminNotifications : base.adminNotifications,
+    passwordResetTokens: Array.isArray(draft.passwordResetTokens) ? draft.passwordResetTokens : base.passwordResetTokens,
     settings: mergePersistedSettings(base.settings, draft.settings),
   };
 }
@@ -644,10 +731,29 @@ function cloneMedia(media: MediaAsset): MediaAsset {
   return { ...media };
 }
 
+function cloneSupportTicket(ticket: SupportTicket): SupportTicket {
+  const safeReplies = Array.isArray(ticket.replies) ? ticket.replies : [];
+  return {
+    ...ticket,
+    replies: safeReplies.map((reply) => ({ ...reply })),
+  };
+}
+
+function cloneAdminNotification(notification: AdminNotification): AdminNotification {
+  return { ...notification };
+}
+
+function clonePasswordResetToken(token: PasswordResetToken): PasswordResetToken {
+  return { ...token };
+}
+
 function cloneSiteSettings(settings: SiteSettings): SiteSettings {
+  const headerMenu = Array.isArray(settings.headerMenu) ? settings.headerMenu : [];
+  const homeSlides = Array.isArray(settings.homeSlides) ? settings.homeSlides : [];
   return {
     ...settings,
-    headerMenu: settings.headerMenu.map((item) => ({ ...item })),
+    headerMenu: headerMenu.map((item) => ({ ...item })),
+    homeSlides: homeSlides.map((slide) => ({ ...slide })),
   };
 }
 
@@ -693,14 +799,119 @@ function defaultHeaderMenu(): SiteMenuItem[] {
   ];
 }
 
+const HOME_SLIDER_DEFAULT_IMAGE =
+  "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=1200&q=80";
+
+function normalizeHomeSliderPreset(value: unknown): HomeSliderPreset {
+  const safe = asSafeString(value).toLowerCase();
+  if (safe === "ocean") return "ocean";
+  if (safe === "forest") return "forest";
+  if (safe === "violet") return "violet";
+  if (safe === "sunrise") return "sunrise";
+  return "sunset";
+}
+
+function defaultHomeSlides(): HomeSliderItem[] {
+  return [
+    {
+      id: "slide-1",
+      badge: "Collection 2026",
+      title: "Stili i ri per sezonin e ardhshem",
+      description: "Zbritje deri ne 40% per artikujt me te kerkuar. Furnizim i limituar per modelet premium.",
+      ctaPrimary: "Shop Now",
+      ctaPrimaryHref: "/shop",
+      ctaSecondary: "Shiko koleksionin",
+      ctaSecondaryHref: "/collections",
+      imageUrl: HOME_SLIDER_DEFAULT_IMAGE,
+      gradientPreset: "sunset",
+    },
+    {
+      id: "slide-2",
+      badge: "Tech Essentials",
+      title: "Aksesore modern per pune dhe gaming",
+      description: "Produkte te zgjedhura per performance dhe komoditet, me dergese te shpejte ne gjithe vendin.",
+      ctaPrimary: "Bli tani",
+      ctaPrimaryHref: "/shop",
+      ctaSecondary: "Shiko ofertat",
+      ctaSecondaryHref: "/collections",
+      imageUrl: HOME_SLIDER_DEFAULT_IMAGE,
+      gradientPreset: "ocean",
+    },
+    {
+      id: "slide-3",
+      badge: "Home Picks",
+      title: "Transformo shtepine me detaje smart",
+      description: "Nga dekor modern te pajisje praktike, gjithcka ne nje homepage te vetme per shop-in tend.",
+      ctaPrimary: "Eksploro",
+      ctaPrimaryHref: "/shop",
+      ctaSecondary: "Produktet e reja",
+      ctaSecondaryHref: "/collections",
+      imageUrl: HOME_SLIDER_DEFAULT_IMAGE,
+      gradientPreset: "forest",
+    },
+  ];
+}
+
+function normalizeHomeSlides(input: unknown): HomeSliderItem[] {
+  if (!Array.isArray(input)) return defaultHomeSlides();
+
+  const output: HomeSliderItem[] = [];
+  const ids = new Set<string>();
+
+  for (let index = 0; index < input.length; index += 1) {
+    const raw = input[index];
+    if (typeof raw !== "object" || raw === null) continue;
+    const item = raw as Partial<HomeSliderItem>;
+    const title = asSafeString(item.title).slice(0, 140);
+    if (!title) continue;
+
+    let id = asSafeString(item.id) || `slide-${index + 1}`;
+    while (ids.has(id)) {
+      id = `${id}-${index + 1}`;
+    }
+    ids.add(id);
+
+    output.push({
+      id,
+      badge: asSafeString(item.badge).slice(0, 60),
+      title,
+      description: asSafeString(item.description).slice(0, 420),
+      ctaPrimary: asSafeString(item.ctaPrimary).slice(0, 40) || "Shop Now",
+      ctaPrimaryHref: normalizeMenuHref(item.ctaPrimaryHref ?? "/shop"),
+      ctaSecondary: asSafeString(item.ctaSecondary).slice(0, 40) || "Shiko koleksionin",
+      ctaSecondaryHref: normalizeMenuHref(item.ctaSecondaryHref ?? "/collections"),
+      imageUrl: asSafeString(item.imageUrl) || HOME_SLIDER_DEFAULT_IMAGE,
+      gradientPreset: normalizeHomeSliderPreset(item.gradientPreset),
+    });
+
+    if (output.length >= 12) break;
+  }
+
+  return output.length > 0 ? output : defaultHomeSlides();
+}
+
 function defaultSiteSettings(): SiteSettings {
   return {
     siteTitle: "BLI Shop",
     brandName: "BLI",
+    layoutMaxWidthPx: 1440,
     logoUrl: "/logo.svg",
     iconUrl: "/favicon.ico",
+    brandingVersion: 1,
     useLogoOnly: false,
     headerMenu: defaultHeaderMenu(),
+    homeSlides: defaultHomeSlides(),
+    sliderAutoplayMs: 4500,
+    sliderShowArrows: true,
+    sliderShowDots: true,
+    titleFont: "var(--font-geist-sans), sans-serif",
+    textFont: "var(--font-geist-sans), sans-serif",
+    buttonFont: "var(--font-geist-sans), sans-serif",
+    uiFont: "var(--font-geist-sans), sans-serif",
+    primaryColor: "#ff8a00",
+    secondaryColor: "#0f172a",
+    accentColor: "#2ea2cc",
+    backgroundColor: "#ffffff",
     emailProvider: "smtp",
     emailFromName: "BLI Shop",
     emailFromAddress: "noreply@bli.local",
@@ -817,6 +1028,7 @@ function normalizeReviewsInPlace(reviews: ProductReview[]): void {
 function normalizeOrdersInPlace(orders: Order[]): void {
   for (const order of orders) {
     order.customer = asSafeString(order.customer);
+    order.userId = asSafeString(order.userId ?? "") || null;
     order.productId = asSafeString(order.productId);
     order.quantity = Math.max(1, Math.floor(order.quantity));
     order.total = money(order.total);
@@ -838,10 +1050,20 @@ function normalizeUsersInPlace(users: User[]): void {
   const seenUsernames = new Set<string>();
 
   for (const user of users) {
-    user.name = asSafeString(user.name);
-    user.username = normalizeUsername(user.username || usernameFromName(user.name));
+    const rawName = asSafeString(user.name);
+    const rawSurname = asSafeString(user.surname);
+    if (!rawSurname && rawName.includes(" ")) {
+      const parts = rawName.split(/\s+/).filter(Boolean);
+      user.name = parts.shift() || rawName;
+      user.surname = parts.join(" ");
+    } else {
+      user.name = rawName;
+      user.surname = rawSurname;
+    }
+    user.username = normalizeUsername(user.username || usernameFromName(`${user.name} ${user.surname}`));
     user.email = toEmail(user.email);
     user.password = asSafeString(user.password);
+    user.avatarUrl = asSafeString(user.avatarUrl);
     user.role = normalizeUserRole(user.role);
     user.phone = asSafeString(user.phone);
     user.city = asSafeString(user.city);
@@ -911,6 +1133,77 @@ function normalizeMediaInPlace(mediaItems: MediaAsset[]): void {
   }
 }
 
+function normalizeSupportTicketsInPlace(tickets: SupportTicket[]): void {
+  for (const ticket of tickets) {
+    ticket.userId = asSafeString(ticket.userId);
+    ticket.username = normalizeUsername(ticket.username);
+    ticket.email = toEmail(ticket.email);
+    ticket.subject = asSafeString(ticket.subject);
+    ticket.message = asSafeString(ticket.message);
+    if (!Array.isArray(ticket.replies)) {
+      ticket.replies = [];
+    }
+    ticket.replies = ticket.replies
+      .map((reply) => ({
+        id: asSafeString(reply.id) || `RPY-${Math.random().toString(36).slice(2, 9)}`,
+        by: normalizeUsername(reply.by) || "system",
+        message: asSafeString(reply.message),
+        createdAt: asSafeString(reply.createdAt) || new Date().toISOString().slice(0, 10),
+      }))
+      .filter((reply) => Boolean(reply.message));
+    if (ticket.status !== "Open" && ticket.status !== "Closed") {
+      ticket.status = "Open";
+    }
+    ticket.createdAt = asSafeString(ticket.createdAt) || new Date().toISOString().slice(0, 10);
+    ticket.updatedAt = asSafeString(ticket.updatedAt) || ticket.createdAt;
+  }
+}
+
+function normalizeAdminNotificationsInPlace(notifications: AdminNotification[]): void {
+  for (let index = notifications.length - 1; index >= 0; index -= 1) {
+    const notification = notifications[index];
+    notification.id = asSafeString(notification.id) || `NTF-${Date.now()}-${index}`;
+    if (notification.type !== "Order" && notification.type !== "Ticket" && notification.type !== "User") {
+      notification.type = "Order";
+    }
+    notification.title = asSafeString(notification.title) || "Notification";
+    notification.message = asSafeString(notification.message);
+    notification.href = normalizeMenuHref(notification.href || "/dashboard");
+    notification.createdAt = asSafeString(notification.createdAt) || new Date().toISOString();
+    notification.isRead = Boolean(notification.isRead);
+
+    if (!notification.message) {
+      notifications.splice(index, 1);
+    }
+  }
+
+  notifications.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  if (notifications.length > 120) {
+    notifications.splice(120);
+  }
+}
+
+function normalizePasswordResetTokensInPlace(tokens: PasswordResetToken[]): void {
+  const nowMs = Date.now();
+  for (let index = tokens.length - 1; index >= 0; index -= 1) {
+    const token = tokens[index];
+    token.id = asSafeString(token.id);
+    token.userId = asSafeString(token.userId);
+    token.username = normalizeUsername(token.username);
+    token.email = toEmail(token.email);
+    token.token = asSafeString(token.token);
+    token.createdAt = asSafeString(token.createdAt) || new Date().toISOString();
+    token.expiresAt = asSafeString(token.expiresAt);
+    token.usedAt = asSafeString(token.usedAt ?? "") || null;
+
+    const expiresMs = Date.parse(token.expiresAt);
+    const isExpired = !Number.isFinite(expiresMs) || expiresMs <= nowMs;
+    if (!token.id || !token.userId || !token.username || !token.email || !token.token || isExpired) {
+      tokens.splice(index, 1);
+    }
+  }
+}
+
 function ensureProductMediaInLibraryInPlace(s: Store): void {
   const urlToMedia = new Map(s.media.map((media) => [media.url, media]));
   const today = new Date().toISOString().slice(0, 10);
@@ -952,12 +1245,34 @@ function ensureProductMediaInLibraryInPlace(s: Store): void {
 function normalizeSiteSettingsInPlace(settings: SiteSettings): void {
   settings.siteTitle = asSafeString(settings.siteTitle) || "BLI Shop";
   settings.brandName = asSafeString(settings.brandName) || "BLI";
-  settings.logoUrl = asSafeString(settings.logoUrl) || "/logo.svg";
+  settings.layoutMaxWidthPx = clampInt(settings.layoutMaxWidthPx, 960, 2400) || 1440;
+  settings.logoUrl = asSafeString(settings.logoUrl);
   settings.iconUrl = asSafeString(settings.iconUrl) || "/favicon.ico";
-  settings.useLogoOnly = Boolean(settings.useLogoOnly);
+  settings.brandingVersion = Math.max(1, Math.floor(Number(settings.brandingVersion) || 1));
+  settings.useLogoOnly = Boolean(settings.logoUrl);
   settings.headerMenu = Array.isArray(settings.headerMenu)
     ? normalizeHeaderMenu(settings.headerMenu)
     : defaultHeaderMenu();
+  settings.homeSlides = normalizeHomeSlides(settings.homeSlides);
+  settings.sliderAutoplayMs = clampInt(settings.sliderAutoplayMs, 1500, 20000) || 4500;
+  settings.sliderShowArrows = settings.sliderShowArrows !== false;
+  settings.sliderShowDots = settings.sliderShowDots !== false;
+  settings.titleFont = asSafeString(settings.titleFont) || "var(--font-geist-sans), sans-serif";
+  settings.textFont = asSafeString(settings.textFont) || "var(--font-geist-sans), sans-serif";
+  settings.buttonFont = asSafeString(settings.buttonFont) || settings.textFont;
+  settings.uiFont = asSafeString(settings.uiFont) || settings.textFont;
+  settings.primaryColor = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(asSafeString(settings.primaryColor))
+    ? asSafeString(settings.primaryColor)
+    : "#ff8a00";
+  settings.secondaryColor = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(asSafeString(settings.secondaryColor))
+    ? asSafeString(settings.secondaryColor)
+    : "#0f172a";
+  settings.accentColor = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(asSafeString(settings.accentColor))
+    ? asSafeString(settings.accentColor)
+    : "#2ea2cc";
+  settings.backgroundColor = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(asSafeString(settings.backgroundColor))
+    ? asSafeString(settings.backgroundColor)
+    : "#ffffff";
   if (
     settings.emailProvider !== "smtp" &&
     settings.emailProvider !== "phpmailer" &&
@@ -1062,7 +1377,6 @@ function generateDemoUsers(count: number, startId = 7101): User[] {
     const firstName = DEMO_FIRST_NAMES[(index * 7 + 3) % DEMO_FIRST_NAMES.length];
     const lastName = DEMO_LAST_NAMES[(index * 11 + 5) % DEMO_LAST_NAMES.length];
     const city = DEMO_CITIES[(index * 5 + 2) % DEMO_CITIES.length];
-    const name = `${firstName} ${lastName}`;
     const baseUsername = normalizeUsername(`${firstName}${lastName}`);
     const role: UserRole =
       index % 23 === 0 ? "Admin" : index % 11 === 0 ? "Manager" : "Customer";
@@ -1072,10 +1386,12 @@ function generateDemoUsers(count: number, startId = 7101): User[] {
 
     return {
       id: `USR-${String(startId + index)}`,
-      name,
+      name: firstName,
+      surname: lastName,
       username: baseUsername,
       email: `${baseUsername}${suffix}@demo.bli`,
       password: "demo1234",
+      avatarUrl: "",
       role,
       phone: `+35569${phoneSerial}`,
       city,
@@ -1195,10 +1511,12 @@ function createInitialStore(): Store {
     users: [
       {
         id: "USR-7001",
-        name: "Emiljano Gogo",
+        name: "Emiljano",
+        surname: "Gogo",
         username: "emiljano",
         email: "emiljano@bli.local",
         password: "demo1234",
+        avatarUrl: "",
         role: "Super Admin",
         phone: "+355691001001",
         city: "Tirane",
@@ -1212,6 +1530,9 @@ function createInitialStore(): Store {
     ],
     pages: [],
     media: [],
+    supportTickets: [],
+    adminNotifications: [],
+    passwordResetTokens: [],
     settings: defaultSiteSettings(),
   };
 }
@@ -1230,10 +1551,12 @@ function migrateLegacyUsersInPlace(s: Store): void {
   s.users = [
     {
       id: existingEmiljano?.id || "USR-7001",
-      name: existingEmiljano?.name || "Emiljano Gogo",
+      name: existingEmiljano?.name || "Emiljano",
+      surname: existingEmiljano?.surname || "Gogo",
       username: "emiljano",
       email: "emiljano@bli.local",
       password: existingEmiljano?.password || "demo1234",
+      avatarUrl: existingEmiljano?.avatarUrl || "",
       role: "Super Admin",
       phone: existingEmiljano?.phone || "+355691001001",
       city: existingEmiljano?.city || "Tirane",
@@ -1258,6 +1581,7 @@ function migrateLegacyEntityIdsInPlace(s: Store): void {
     s.users,
     s.pages,
     s.media,
+    s.supportTickets,
   ];
   const needsMigration = entityCollections.some((items) => !hasCleanNumericIds(items));
   if (!needsMigration) return;
@@ -1271,6 +1595,7 @@ function migrateLegacyEntityIdsInPlace(s: Store): void {
   remapEntityIdsInPlace(s.users);
   remapEntityIdsInPlace(s.pages);
   remapEntityIdsInPlace(s.media);
+  remapEntityIdsInPlace(s.supportTickets);
 
   for (const order of s.orders) {
     const mappedProductId = productIdMap.get(order.productId);
@@ -1308,6 +1633,15 @@ function store(): Store {
       if (!globalThis.__bli_store__.media) {
         globalThis.__bli_store__.media = [];
       }
+      if (!globalThis.__bli_store__.supportTickets) {
+        globalThis.__bli_store__.supportTickets = [];
+      }
+      if (!globalThis.__bli_store__.adminNotifications) {
+        globalThis.__bli_store__.adminNotifications = [];
+      }
+      if (!globalThis.__bli_store__.passwordResetTokens) {
+        globalThis.__bli_store__.passwordResetTokens = [];
+      }
       if (!globalThis.__bli_store__.settings) {
         globalThis.__bli_store__.settings = defaultSiteSettings();
       }
@@ -1321,6 +1655,9 @@ function store(): Store {
       normalizeUsersInPlace(globalThis.__bli_store__.users);
       normalizePagesInPlace(globalThis.__bli_store__.pages);
       normalizeMediaInPlace(globalThis.__bli_store__.media);
+      normalizeSupportTicketsInPlace(globalThis.__bli_store__.supportTickets);
+      normalizeAdminNotificationsInPlace(globalThis.__bli_store__.adminNotifications);
+      normalizePasswordResetTokensInPlace(globalThis.__bli_store__.passwordResetTokens);
       if (globalThis.__bli_store__.media.length === 0) {
         ensureProductMediaInLibraryInPlace(globalThis.__bli_store__);
         normalizeMediaInPlace(globalThis.__bli_store__.media);
@@ -1346,6 +1683,14 @@ function nextId(prefix: string): string {
   if (prefix === "USR") return nextEntityId(s.users);
   if (prefix === "PGE") return nextEntityId(s.pages);
   if (prefix === "MDA") return nextEntityId(s.media);
+  if (prefix === "TKT") {
+    const tickets = (s as Store & { supportTickets?: SupportTicket[] }).supportTickets;
+    if (!Array.isArray(tickets)) {
+      (s as Store & { supportTickets?: SupportTicket[] }).supportTickets = [];
+      return nextEntityId((s as Store & { supportTickets: SupportTicket[] }).supportTickets);
+    }
+    return nextEntityId(tickets);
+  }
 
   s.seq += 1;
   return formatEntityId(s.seq);
@@ -1407,6 +1752,213 @@ export function getProductBySlug(
 
 export function listOrders(): Order[] {
   return [...store().orders].sort((a, b) => b.id.localeCompare(a.id));
+}
+
+export function listOrdersByCustomer(customerQuery: string): Order[] {
+  const safe = asSafeString(customerQuery).toLowerCase();
+  if (!safe) return [];
+  return listOrders().filter((order) => asSafeString(order.customer).toLowerCase().includes(safe));
+}
+
+export function listOrdersByUser(userId: string): Order[] {
+  const safe = asSafeString(userId);
+  if (!safe) return [];
+  return listOrders().filter((order) => asSafeString(order.userId ?? "") === safe);
+}
+
+function ensureSupportTicketsStore(): SupportTicket[] {
+  const s = store() as Store & { supportTickets?: SupportTicket[] };
+  if (!Array.isArray(s.supportTickets)) {
+    s.supportTickets = [];
+  }
+  return s.supportTickets;
+}
+
+function ensureAdminNotificationsStore(): AdminNotification[] {
+  const s = store() as Store & { adminNotifications?: AdminNotification[] };
+  if (!Array.isArray(s.adminNotifications)) {
+    s.adminNotifications = [];
+  }
+  return s.adminNotifications;
+}
+
+function pushAdminNotification(input: {
+  type: AdminNotificationType;
+  title: string;
+  message: string;
+  href: string;
+}): AdminNotification | null {
+  const type =
+    input.type === "Ticket" || input.type === "User"
+      ? input.type
+      : "Order";
+  const title = asSafeString(input.title) || "Notification";
+  const message = asSafeString(input.message);
+  if (!message) return null;
+
+  const notifications = ensureAdminNotificationsStore();
+  const notification: AdminNotification = {
+    id: `NTF-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    type,
+    title,
+    message,
+    href: normalizeMenuHref(input.href || "/dashboard"),
+    createdAt: new Date().toISOString(),
+    isRead: false,
+  };
+  notifications.unshift(notification);
+  normalizeAdminNotificationsInPlace(notifications);
+  return cloneAdminNotification(notification);
+}
+
+function isAdminLikeActor(actor: string): boolean {
+  const normalized = normalizeUsername(actor);
+  if (!normalized) return false;
+  if (normalized.includes("admin")) return true;
+  const user = store().users.find((item) => item.username === normalized);
+  return user ? user.role !== "Customer" : false;
+}
+
+export function addAdminNotification(input: {
+  type: AdminNotificationType;
+  title: string;
+  message: string;
+  href: string;
+}): AdminNotification | null {
+  return pushAdminNotification(input);
+}
+
+export function listSupportTicketsByUser(userId: string): SupportTicket[] {
+  const safeUserId = asSafeString(userId);
+  if (!safeUserId) return [];
+  return ensureSupportTicketsStore()
+    .filter((ticket) => ticket.userId === safeUserId)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .map(cloneSupportTicket);
+}
+
+export function listSupportTickets(): SupportTicket[] {
+  return ensureSupportTicketsStore()
+    .slice()
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .map(cloneSupportTicket);
+}
+
+export function listAdminNotifications(limit = 15): AdminNotification[] {
+  const safeLimit = clampInt(limit, 1, 50);
+  return ensureAdminNotificationsStore()
+    .slice(0, safeLimit)
+    .map(cloneAdminNotification);
+}
+
+export function countUnreadAdminNotifications(): number {
+  return ensureAdminNotificationsStore().filter((notification) => !notification.isRead).length;
+}
+
+export function markAllAdminNotificationsAsRead(): number {
+  const notifications = ensureAdminNotificationsStore();
+  let updated = 0;
+  for (const notification of notifications) {
+    if (!notification.isRead) {
+      notification.isRead = true;
+      updated += 1;
+    }
+  }
+  return updated;
+}
+
+export function addSupportTicket(input: {
+  userId: string;
+  username: string;
+  email: string;
+  subject: string;
+  message: string;
+}): SupportTicket | null {
+  const userId = asSafeString(input.userId);
+  const username = normalizeUsername(input.username);
+  const email = toEmail(input.email);
+  const subject = asSafeString(input.subject);
+  const message = asSafeString(input.message);
+  if (!userId || !username || !email || !subject || !message) return null;
+
+  const now = new Date().toISOString().slice(0, 10);
+  const ticket: SupportTicket = {
+    id: nextId("TKT"),
+    userId,
+    username,
+    email,
+    subject,
+    message,
+    replies: [],
+    status: "Open",
+    createdAt: now,
+    updatedAt: now,
+  };
+  ensureSupportTicketsStore().unshift(ticket);
+  pushAdminNotification({
+    type: "Ticket",
+    title: "New ticket",
+    message: `${ticket.subject} (${ticket.username})`,
+    href: "/dashboard/help-tickets",
+  });
+  return cloneSupportTicket(ticket);
+}
+
+export function addSupportTicketReply(ticketId: string, by: string, message: string): SupportTicket | null {
+  const safeTicketId = asSafeString(ticketId);
+  const safeBy = normalizeUsername(by);
+  const safeMessage = asSafeString(message);
+  if (!safeTicketId || !safeBy || !safeMessage) return null;
+
+  const target = ensureSupportTicketsStore().find((ticket) => ticket.id === safeTicketId);
+  if (!target) return null;
+  if (!Array.isArray(target.replies)) {
+    target.replies = [];
+  }
+
+  const now = new Date().toISOString().slice(0, 10);
+  const reply: SupportTicketReply = {
+    id: `${target.id}-RPY-${target.replies.length + 1}`,
+    by: safeBy,
+    message: safeMessage,
+    createdAt: now,
+  };
+  target.replies.push(reply);
+  target.updatedAt = now;
+  if (target.status !== "Open") {
+    target.status = "Open";
+  }
+  if (!isAdminLikeActor(safeBy)) {
+    pushAdminNotification({
+      type: "Ticket",
+      title: "Ticket reply",
+      message: `${target.subject} (${target.username})`,
+      href: "/dashboard/help-tickets",
+    });
+  }
+  return cloneSupportTicket(target);
+}
+
+export function setSupportTicketStatus(ticketId: string, status: SupportTicketStatus): SupportTicket | null {
+  const safeTicketId = asSafeString(ticketId);
+  if (!safeTicketId) return null;
+  if (status !== "Open" && status !== "Closed") return null;
+
+  const target = ensureSupportTicketsStore().find((ticket) => ticket.id === safeTicketId);
+  if (!target) return null;
+  target.status = status;
+  target.updatedAt = new Date().toISOString().slice(0, 10);
+  return cloneSupportTicket(target);
+}
+
+export function deleteSupportTicket(ticketId: string): boolean {
+  const safeTicketId = asSafeString(ticketId);
+  if (!safeTicketId) return false;
+  const tickets = ensureSupportTicketsStore();
+  const index = tickets.findIndex((ticket) => ticket.id === safeTicketId);
+  if (index === -1) return false;
+  tickets.splice(index, 1);
+  return true;
 }
 
 export function listSales(): Sale[] {
@@ -1587,6 +2139,96 @@ export function authenticateUser(identifier: string, password: string): User | n
   return null;
 }
 
+function newPasswordResetToken(): string {
+  const value = Math.floor(100000 + Math.random() * 900000);
+  return String(value);
+}
+
+function nextPasswordResetTokenId(): string {
+  const seed = Math.random().toString(36).slice(2, 8);
+  return `PRT-${Date.now().toString(36)}-${seed}`;
+}
+
+export function requestPasswordReset(identifier: string): {
+  sent: boolean;
+  token?: PasswordResetToken;
+} {
+  const byEmail = findUserByEmail(identifier);
+  const byUsername = findUserByUsername(identifier);
+  const user = byEmail ?? byUsername;
+  if (!user || !user.isActive) {
+    return { sent: false };
+  }
+
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + 1000 * 60 * 30); // 30 min
+  const token: PasswordResetToken = {
+    id: nextPasswordResetTokenId(),
+    userId: user.id,
+    username: user.username,
+    email: user.email,
+    token: newPasswordResetToken(),
+    createdAt: now.toISOString(),
+    expiresAt: expiresAt.toISOString(),
+    usedAt: null,
+  };
+
+  const tokenStore = (store() as Store).passwordResetTokens;
+  tokenStore.unshift(token);
+  normalizePasswordResetTokensInPlace(tokenStore);
+
+  return {
+    sent: true,
+    token: clonePasswordResetToken(token),
+  };
+}
+
+export function resetPasswordWithToken(input: {
+  identifier: string;
+  token: string;
+  newPassword: string;
+}): boolean {
+  const identifier = asSafeString(input.identifier);
+  const token = asSafeString(input.token);
+  const newPassword = asSafeString(input.newPassword);
+  if (!identifier || !token || newPassword.length < 6) return false;
+
+  const byEmail = findUserByEmail(identifier);
+  const byUsername = findUserByUsername(identifier);
+  const user = byEmail ?? byUsername;
+  if (!user || !user.isActive) return false;
+
+  const tokenStore = (store() as Store).passwordResetTokens;
+  normalizePasswordResetTokensInPlace(tokenStore);
+  const now = Date.now();
+  const matched = tokenStore.find(
+    (entry) =>
+      entry.userId === user.id &&
+      entry.token === token &&
+      !entry.usedAt &&
+      Number.isFinite(Date.parse(entry.expiresAt)) &&
+      Date.parse(entry.expiresAt) > now,
+  );
+  if (!matched) return false;
+
+  const updated = updateUser(user.id, {
+    name: user.name,
+    surname: user.surname,
+    username: user.username,
+    email: user.email,
+    password: newPassword,
+    avatarUrl: user.avatarUrl,
+    role: user.role,
+    phone: user.phone,
+    city: user.city,
+    address: user.address,
+  });
+  if (!updated) return false;
+
+  matched.usedAt = new Date().toISOString();
+  return true;
+}
+
 function nextAvailableUsername(
   users: User[],
   preferred: string,
@@ -1601,6 +2243,7 @@ function nextAvailableUsername(
 export function addUser(input: UserInput): User | null {
   const email = toEmail(input.email);
   const name = asSafeString(input.name);
+  const surname = asSafeString(input.surname);
   const password = asSafeString(input.password);
   const source = input.source ?? "Admin";
   const role = input.role ? normalizeUserRole(input.role) : source === "Checkout" ? "Customer" : "Admin";
@@ -1609,14 +2252,16 @@ export function addUser(input: UserInput): User | null {
   if (findUserByEmail(email)) return null;
 
   const users = store().users;
-  const username = nextAvailableUsername(users, input.username || usernameFromName(name));
+  const username = nextAvailableUsername(users, input.username || usernameFromName(`${name} ${surname}`));
 
   const user: User = {
     id: nextId("USR"),
     name,
+    surname,
     username,
     email,
     password,
+    avatarUrl: asSafeString(input.avatarUrl),
     role,
     phone: asSafeString(input.phone),
     city: asSafeString(input.city),
@@ -1649,10 +2294,11 @@ export function updateUser(userId: string, input: UserUpdateInput): User | null 
   if (password && password.length < 6) return null;
 
   target.name = asSafeString(input.name);
+  target.surname = asSafeString(input.surname);
   target.email = email;
   target.username = nextAvailableUsername(
     users,
-    input.username || usernameFromName(target.name),
+    input.username || usernameFromName(`${target.name} ${target.surname}`),
     { excludeUserId: userId },
   );
   target.role = normalizeUserRole(input.role);
@@ -1660,6 +2306,7 @@ export function updateUser(userId: string, input: UserUpdateInput): User | null 
     target.password = password;
     target.passwordResetRequired = false;
   }
+  target.avatarUrl = asSafeString(input.avatarUrl);
   target.phone = asSafeString(input.phone);
   target.city = asSafeString(input.city);
   target.address = asSafeString(input.address);
@@ -1961,6 +2608,7 @@ export function deleteProductPermanently(productId: string): boolean {
 
 export function addOrder(input: {
   customer: string;
+  userId?: string | null;
   productId: string;
   quantity: number;
   status: OrderStatus;
@@ -1968,7 +2616,8 @@ export function addOrder(input: {
   discount?: number;
   couponCode?: string | null;
 }): Order {
-  const product = store().products.find((item) => item.id === input.productId);
+  const s = store();
+  const product = s.products.find((item) => item.id === input.productId);
   const productPrice = product?.price ?? 0;
   const baseTotal = money(input.quantity * productPrice);
   const discount = money(input.discount ?? 0);
@@ -1977,6 +2626,7 @@ export function addOrder(input: {
   const order: Order = {
     id: nextId("ORD"),
     customer: asSafeString(input.customer),
+    userId: asSafeString(input.userId ?? "") || null,
     productId: input.productId,
     quantity: Math.max(1, Math.floor(input.quantity)),
     total: totalFromInput,
@@ -1985,7 +2635,15 @@ export function addOrder(input: {
     status: input.status,
     createdAt: new Date().toISOString().slice(0, 10),
   };
-  store().orders.unshift(order);
+  s.orders.unshift(order);
+  if (s.settings.notifyAdminPaidOrder) {
+    pushAdminNotification({
+      type: "Order",
+      title: "New order",
+      message: `${order.id} from ${order.customer}`,
+      href: `/dashboard/orders/${order.id}`,
+    });
+  }
   return order;
 }
 
@@ -2220,17 +2878,59 @@ export function updateSiteSettings(input: Partial<SiteSettings>): SiteSettings {
   if (input.brandName !== undefined) {
     target.brandName = asSafeString(input.brandName);
   }
+  if (input.layoutMaxWidthPx !== undefined) {
+    target.layoutMaxWidthPx = Math.max(0, Math.floor(Number(input.layoutMaxWidthPx) || 0));
+  }
   if (input.logoUrl !== undefined) {
     target.logoUrl = asSafeString(input.logoUrl);
   }
   if (input.iconUrl !== undefined) {
     target.iconUrl = asSafeString(input.iconUrl);
   }
+  if (input.brandingVersion !== undefined) {
+    target.brandingVersion = Math.max(1, Math.floor(Number(input.brandingVersion) || 1));
+  }
   if (input.useLogoOnly !== undefined) {
     target.useLogoOnly = Boolean(input.useLogoOnly);
   }
   if (input.headerMenu !== undefined) {
     target.headerMenu = normalizeHeaderMenu(input.headerMenu);
+  }
+  if (input.homeSlides !== undefined) {
+    target.homeSlides = normalizeHomeSlides(input.homeSlides);
+  }
+  if (input.sliderAutoplayMs !== undefined) {
+    target.sliderAutoplayMs = Math.max(0, Math.floor(Number(input.sliderAutoplayMs) || 0));
+  }
+  if (input.sliderShowArrows !== undefined) {
+    target.sliderShowArrows = Boolean(input.sliderShowArrows);
+  }
+  if (input.sliderShowDots !== undefined) {
+    target.sliderShowDots = Boolean(input.sliderShowDots);
+  }
+  if (input.titleFont !== undefined) {
+    target.titleFont = asSafeString(input.titleFont);
+  }
+  if (input.textFont !== undefined) {
+    target.textFont = asSafeString(input.textFont);
+  }
+  if (input.buttonFont !== undefined) {
+    target.buttonFont = asSafeString(input.buttonFont);
+  }
+  if (input.uiFont !== undefined) {
+    target.uiFont = asSafeString(input.uiFont);
+  }
+  if (input.primaryColor !== undefined) {
+    target.primaryColor = asSafeString(input.primaryColor);
+  }
+  if (input.secondaryColor !== undefined) {
+    target.secondaryColor = asSafeString(input.secondaryColor);
+  }
+  if (input.accentColor !== undefined) {
+    target.accentColor = asSafeString(input.accentColor);
+  }
+  if (input.backgroundColor !== undefined) {
+    target.backgroundColor = asSafeString(input.backgroundColor);
   }
   if (input.emailProvider !== undefined) {
     target.emailProvider = input.emailProvider;

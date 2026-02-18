@@ -15,7 +15,7 @@ export default async function ShopPage() {
 
   return (
     <main className="text-slate-900">
-      <section className="mx-auto w-[90%] max-w-[1440px] py-10 md:py-14">
+      <section className="mx-auto w-[90%] max-w-[var(--site-layout-max-width)] py-10 md:py-14">
         <div className="mb-8 rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
           <p className="text-sm font-medium text-slate-500">Shop</p>
           <h1 className="mt-2 text-4xl font-bold">Produktet tona</h1>
@@ -25,7 +25,7 @@ export default async function ShopPage() {
           </p>
           <Link
             href="/collections"
-            className="mt-5 inline-block rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-700"
+            className="mt-5 inline-block rounded-xl site-primary-bg px-5 py-3 text-sm font-semibold text-white transition site-primary-bg-hover"
           >
             Shiko Collections
           </Link>
@@ -72,7 +72,7 @@ export default async function ShopPage() {
                     name={product.name}
                     price={product.price}
                     image={product.image}
-                    className="mt-4 rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700"
+                    className="mt-4 rounded-xl site-primary-bg px-4 py-2 text-sm font-semibold text-white transition site-primary-bg-hover"
                   />
                 </article>
               );
@@ -83,3 +83,4 @@ export default async function ShopPage() {
     </main>
   );
 }
+

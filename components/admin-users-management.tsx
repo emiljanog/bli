@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { registerUserAction } from "@/app/dashboard/actions";
 import { AdminUsersTable, type AdminUserRow } from "@/components/admin-users-table";
 import type { UserRole } from "@/lib/shop-store";
@@ -10,6 +10,7 @@ type AdminUsersManagementProps = {
   currentRole: UserRole;
   viewerKey: string;
   creatableRoles: UserRole[];
+  initialRoleFilter?: UserRole | "All";
 };
 
 export function AdminUsersManagement({
@@ -17,9 +18,14 @@ export function AdminUsersManagement({
   currentRole,
   viewerKey,
   creatableRoles,
+  initialRoleFilter = "All",
 }: AdminUsersManagementProps) {
   const [searchQuery, setSearchQuery] = useState("");
-  const [roleFilter, setRoleFilter] = useState<UserRole | "All">("All");
+  const [roleFilter, setRoleFilter] = useState<UserRole | "All">(initialRoleFilter);
+
+  useEffect(() => {
+    setRoleFilter(initialRoleFilter);
+  }, [initialRoleFilter]);
 
   const roleCounts = useMemo(
     () =>
@@ -95,13 +101,21 @@ export function AdminUsersManagement({
         <article className="rounded-2xl border border-slate-200 bg-white p-5">
           <p className="text-2xl font-semibold">Create User</p>
           <form action={registerUserAction} className="mt-4 space-y-3">
-            <input
-              name="name"
-              type="text"
-              placeholder="Full name"
-              className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
-              required
-            />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <input
+                name="name"
+                type="text"
+                placeholder="Name"
+                className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+                required
+              />
+              <input
+                name="surname"
+                type="text"
+                placeholder="Surname"
+                className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+              />
+            </div>
             <input
               name="username"
               type="text"
@@ -114,6 +128,12 @@ export function AdminUsersManagement({
               placeholder="Email"
               className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
               required
+            />
+            <input
+              name="avatarUrl"
+              type="url"
+              placeholder="Avatar URL (https://...)"
+              className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
             />
             <input
               name="password"
@@ -155,7 +175,7 @@ export function AdminUsersManagement({
             <input type="hidden" name="redirectTo" value="/dashboard/users" />
             <button
               type="submit"
-              className="w-full rounded-xl bg-[#ff8a00] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#ea7f00]"
+              className="w-full rounded-xl site-primary-bg px-4 py-2 text-sm font-semibold text-white transition site-primary-bg-hover"
             >
               Save User
             </button>
