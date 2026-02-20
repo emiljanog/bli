@@ -26,7 +26,7 @@ export default async function AdminMediaEditPage({ params }: AdminMediaEditPageP
     <AdminShell title={`Edit Media: ${media.id}`} description="Edit image, crop, replace, alt text and description.">
       <div className="grid gap-4 xl:grid-cols-[1fr_320px]">
         <article className="rounded-2xl border border-slate-200 bg-white p-5">
-          <form action={updateMediaAction} encType="multipart/form-data" className="space-y-4">
+          <form action={updateMediaAction} className="space-y-4">
             <input type="hidden" name="mediaId" value={media.id} />
             <input type="hidden" name="redirectTo" value={`/dashboard/media/${media.id}`} />
 

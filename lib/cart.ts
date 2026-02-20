@@ -14,11 +14,22 @@ export type CartItemInput = {
   quantity?: number;
 };
 
-const CART_STORAGE_KEY = "bli_cart_items";
 const CART_UPDATED_EVENT = "bli-cart-updated";
 
-function canUseStorage(): boolean {
-  return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
+let cartCache: CartItem[] = [];
+
+function canUseWindow(): boolean {
+  return typeof window !== "undefined";
+}
+
+function sanitizeString(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function sanitizePrice(value: unknown): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return 0;
+  return Math.max(0, Number(parsed.toFixed(2)));
 }
 
 function sanitizeCount(value?: number): number {
@@ -26,93 +37,141 @@ function sanitizeCount(value?: number): number {
   return Math.floor(value);
 }
 
-export function readCart(): CartItem[] {
-  if (!canUseStorage()) return [];
+function normalizeCartItem(input: unknown): CartItem | null {
+  if (typeof input !== "object" || input === null) return null;
+  const row = input as Partial<CartItem>;
 
-  try {
-    const raw = window.localStorage.getItem(CART_STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter((item) => item && typeof item.id === "string");
-  } catch {
-    return [];
-  }
+  const id = sanitizeString(row.id);
+  const name = sanitizeString(row.name);
+  const price = sanitizePrice(row.price);
+  if (!id || !name || price <= 0) return null;
+
+  return {
+    id,
+    name,
+    price,
+    quantity: sanitizeCount(row.quantity),
+    image: sanitizeString(row.image) || undefined,
+  };
 }
 
-function writeCart(items: CartItem[]): void {
-  if (!canUseStorage()) return;
-  window.localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(items));
+function normalizeCartItems(input: unknown): CartItem[] {
+  if (!Array.isArray(input)) return [];
+  return input
+    .map((item) => normalizeCartItem(item))
+    .filter((item): item is CartItem => Boolean(item));
+}
+
+function cloneCartItems(items: CartItem[]): CartItem[] {
+  return items.map((item) => ({ ...item }));
 }
 
 function emitCartUpdated(): void {
-  if (!canUseStorage()) return;
+  if (!canUseWindow()) return;
   window.dispatchEvent(new CustomEvent(CART_UPDATED_EVENT));
 }
 
-export function addItemToCart(input: CartItemInput): CartItem[] {
-  const current = readCart();
-  const quantity = sanitizeCount(input.quantity);
-  const existing = current.find((item) => item.id === input.id);
+async function requestCart(
+  method: "GET" | "POST" | "PATCH" | "DELETE",
+  options: { body?: Record<string, unknown>; itemId?: string } = {},
+): Promise<CartItem[]> {
+  if (!canUseWindow()) return [];
 
-  if (existing) {
-    existing.quantity += quantity;
-  } else {
-    current.push({
-      id: input.id,
-      name: input.name,
-      price: input.price,
-      image: input.image,
-      quantity,
+  const query = options.itemId ? `?id=${encodeURIComponent(options.itemId)}` : "";
+  const endpoint = `/api/cart${query}`;
+
+  try {
+    const response = await fetch(endpoint, {
+      method,
+      cache: "no-store",
+      credentials: "same-origin",
+      headers:
+        method === "GET" || method === "DELETE"
+          ? undefined
+          : {
+              "Content-Type": "application/json",
+            },
+      body:
+        method === "GET" || method === "DELETE"
+          ? undefined
+          : JSON.stringify(options.body ?? {}),
     });
+
+    if (!response.ok) {
+      return cloneCartItems(cartCache);
+    }
+
+    const payload = (await response.json()) as { items?: unknown };
+    cartCache = normalizeCartItems(payload.items);
+    return cloneCartItems(cartCache);
+  } catch {
+    return cloneCartItems(cartCache);
   }
+}
 
-  writeCart(current);
+export async function readCart(): Promise<CartItem[]> {
+  return requestCart("GET");
+}
+
+export async function addItemToCart(input: CartItemInput): Promise<CartItem[]> {
+  const items = await requestCart("POST", {
+    body: {
+      id: sanitizeString(input.id),
+      name: sanitizeString(input.name),
+      price: sanitizePrice(input.price),
+      image: sanitizeString(input.image),
+      quantity: sanitizeCount(input.quantity),
+    },
+  });
   emitCartUpdated();
-  return current;
+  return items;
 }
 
-export function getCartCount(): number {
-  return readCart().reduce((sum, item) => sum + sanitizeCount(item.quantity), 0);
+export async function getCartCount(): Promise<number> {
+  const items = await readCart();
+  return items.reduce((sum, item) => sum + sanitizeCount(item.quantity), 0);
 }
 
-export function updateCartItemQuantity(itemId: string, quantity: number): CartItem[] {
-  const current = readCart();
-  const safeQuantity = sanitizeCount(quantity);
-  const target = current.find((item) => item.id === itemId);
-  if (!target) return current;
-
-  target.quantity = safeQuantity;
-  writeCart(current);
+export async function updateCartItemQuantity(itemId: string, quantity: number): Promise<CartItem[]> {
+  const items = await requestCart("PATCH", {
+    body: {
+      id: sanitizeString(itemId),
+      quantity: sanitizeCount(quantity),
+    },
+  });
   emitCartUpdated();
-  return current;
+  return items;
 }
 
-export function removeCartItem(itemId: string): CartItem[] {
-  const current = readCart().filter((item) => item.id !== itemId);
-  writeCart(current);
+export async function removeCartItem(itemId: string): Promise<CartItem[]> {
+  const items = await requestCart("DELETE", { itemId: sanitizeString(itemId) });
   emitCartUpdated();
-  return current;
+  return items;
 }
 
-export function clearCart(): void {
-  writeCart([]);
+export async function clearCart(): Promise<void> {
+  await requestCart("DELETE");
   emitCartUpdated();
 }
 
 export function subscribeCartUpdates(onChange: () => void): () => void {
-  if (typeof window === "undefined") return () => {};
+  if (!canUseWindow()) return () => {};
 
-  const onStorage = (event: StorageEvent) => {
-    if (event.key === CART_STORAGE_KEY) onChange();
-  };
   const onCustom = () => onChange();
+  const onFocus = () => onChange();
+  const onVisibilityChange = () => {
+    if (document.visibilityState === "visible") {
+      onChange();
+    }
+  };
 
-  window.addEventListener("storage", onStorage);
   window.addEventListener(CART_UPDATED_EVENT, onCustom);
+  window.addEventListener("focus", onFocus);
+  document.addEventListener("visibilitychange", onVisibilityChange);
 
   return () => {
-    window.removeEventListener("storage", onStorage);
     window.removeEventListener(CART_UPDATED_EVENT, onCustom);
+    window.removeEventListener("focus", onFocus);
+    document.removeEventListener("visibilitychange", onVisibilityChange);
   };
 }

@@ -32,6 +32,30 @@ function getFlyoutTop(anchorTop: number, panelHeight: number): number {
   return Math.max(FLYOUT_VIEWPORT_MARGIN, Math.min(anchorTop, maxTop));
 }
 
+function useDesktopNav(): boolean {
+  const [isDesktop, setIsDesktop] = useState(false);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(min-width: 1024px)");
+
+    const handleViewportChange = (event: MediaQueryListEvent | MediaQueryList) => {
+      setIsDesktop("matches" in event ? event.matches : mediaQuery.matches);
+    };
+
+    handleViewportChange(mediaQuery);
+
+    if (typeof mediaQuery.addEventListener === "function") {
+      mediaQuery.addEventListener("change", handleViewportChange);
+      return () => mediaQuery.removeEventListener("change", handleViewportChange);
+    }
+
+    mediaQuery.addListener(handleViewportChange);
+    return () => mediaQuery.removeListener(handleViewportChange);
+  }, []);
+
+  return isDesktop;
+}
+
 const storeIcon = (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
     <path d="M3 7h18l-1.5 4.5a2 2 0 0 1-1.9 1.5H6.4a2 2 0 0 1-1.9-1.5z" />
@@ -456,6 +480,7 @@ function ExpandedGroup({
   pathname,
   searchParams,
   active,
+  mobileMode,
 }: {
   label: string;
   icon: ReactNode;
@@ -463,6 +488,7 @@ function ExpandedGroup({
   pathname: string;
   searchParams: SearchParamsLike;
   active: boolean;
+  mobileMode: boolean;
 }) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const flyoutRef = useRef<HTMLDivElement | null>(null);
@@ -489,6 +515,7 @@ function ExpandedGroup({
   }
 
   function handleOpen() {
+    if (mobileMode) return;
     if (closeTimerRef.current) {
       clearTimeout(closeTimerRef.current);
       closeTimerRef.current = null;
@@ -499,6 +526,7 @@ function ExpandedGroup({
   }
 
   function handleCloseWithDelay() {
+    if (mobileMode) return;
     if (closeTimerRef.current) {
       clearTimeout(closeTimerRef.current);
     }
@@ -517,7 +545,7 @@ function ExpandedGroup({
   }, []);
 
   useEffect(() => {
-    if (!open || active) return;
+    if (!open || active || mobileMode) return;
     const onReposition = () => updateFlyoutPosition();
     window.addEventListener("scroll", onReposition, true);
     window.addEventListener("resize", onReposition);
@@ -525,15 +553,21 @@ function ExpandedGroup({
       window.removeEventListener("scroll", onReposition, true);
       window.removeEventListener("resize", onReposition);
     };
-  }, [active, open]);
+  }, [active, mobileMode, open]);
 
-  const showInline = active;
-  const showFlyout = !active && open;
+  const showInline = active || (mobileMode && open);
+  const showFlyout = !mobileMode && !active && open;
 
   return (
-    <div ref={rootRef} className="relative" onMouseEnter={handleOpen} onMouseLeave={handleCloseWithDelay}>
+    <div
+      ref={rootRef}
+      className="relative"
+      onMouseEnter={mobileMode ? undefined : handleOpen}
+      onMouseLeave={mobileMode ? undefined : handleCloseWithDelay}
+    >
       <button
         type="button"
+        onClick={mobileMode ? () => setOpen((previous) => !previous) : undefined}
         className={`flex w-full items-center rounded-lg px-2 py-2 text-sm font-semibold transition ${
           active ? "site-primary-text" : "text-slate-600 hover:bg-slate-200/70"
         }`}
@@ -591,6 +625,7 @@ function ExpandedGroup({
 export function AdminNav({ collapsed = false, role }: AdminNavProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const isDesktop = useDesktopNav();
   const isStoreActive = storeItems.some((item) => isLinkActive(pathname, item, searchParams));
   const isSettingsActive = settingsItems.some((item) => isLinkActive(pathname, item, searchParams));
   const isUsersActive = usersItems.some((item) => isLinkActive(pathname, item, searchParams));
@@ -653,6 +688,7 @@ export function AdminNav({ collapsed = false, role }: AdminNavProps) {
         pathname={pathname}
         searchParams={searchParams}
         active={isStoreActive}
+        mobileMode={!isDesktop}
       />
 
       {showSettingsGroup ? (
@@ -663,6 +699,7 @@ export function AdminNav({ collapsed = false, role }: AdminNavProps) {
           pathname={pathname}
           searchParams={searchParams}
           active={isSettingsActive}
+          mobileMode={!isDesktop}
         />
       ) : null}
 
@@ -674,6 +711,7 @@ export function AdminNav({ collapsed = false, role }: AdminNavProps) {
           pathname={pathname}
           searchParams={searchParams}
           active={isUsersActive}
+          mobileMode={!isDesktop}
         />
       ) : null}
     </nav>

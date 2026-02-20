@@ -3,7 +3,24 @@ import { AdminProductsTable } from "@/components/admin-products-table";
 import { AdminShell } from "@/components/admin-shell";
 import { listProducts, listReviews } from "@/lib/shop-store";
 
-export default async function AdminProductsPage() {
+type AdminProductsPageProps = {
+  searchParams?: Promise<{
+    trash?: string;
+    trashedProductId?: string;
+    undoUntil?: string;
+  }>;
+};
+
+export default async function AdminProductsPage({ searchParams }: AdminProductsPageProps) {
+  const params = (await searchParams) ?? {};
+  const trashedProductId = (params.trashedProductId ?? "").trim();
+  const undoUntil = Number(params.undoUntil);
+  const canShowUndoNotice =
+    params.trash === "1" &&
+    trashedProductId &&
+    Number.isFinite(undoUntil) &&
+    undoUntil > 0;
+
   const allProducts = listProducts({ includeTrashed: true, includeDrafts: true });
   const reviews = listReviews({ status: "all" });
   const reviewCountByProductId = new Map<string, number>();
@@ -21,6 +38,7 @@ export default async function AdminProductsPage() {
     category: product.category,
     tags: product.tags,
     price: product.price,
+    salePrice: product.salePrice,
     stock: product.stock,
     reviews: reviewCountByProductId.get(product.id) ?? 0,
     publishStatus: product.publishStatus,
@@ -33,39 +51,45 @@ export default async function AdminProductsPage() {
 
   return (
     <AdminShell title="Products" description="Create and manage shop products.">
-      <div className="grid gap-4 xl:grid-cols-[1fr_360px]">
-        <article className="rounded-2xl border border-slate-200 bg-white p-5">
-          <p className="mb-4 text-2xl font-semibold">Products</p>
-          <AdminProductsTable products={products} />
-        </article>
+      <article className="rounded-3xl border border-slate-200 bg-[#ececed] p-5">
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <p className="text-4xl font-semibold text-slate-900">Products</p>
+          <Link
+            href="/dashboard/products/new"
+            className="rounded-md border border-[#2271b1] bg-white px-3 py-1.5 text-sm font-semibold text-[#2271b1] transition hover:bg-[#f0f7ff]"
+          >
+            Add new product
+          </Link>
+          <button
+            type="button"
+            className="rounded-md border border-[#2271b1] bg-white px-3 py-1.5 text-sm font-semibold text-[#2271b1] transition hover:bg-[#f0f7ff]"
+          >
+            Import
+          </button>
+          <button
+            type="button"
+            className="rounded-md border border-[#2271b1] bg-white px-3 py-1.5 text-sm font-semibold text-[#2271b1] transition hover:bg-[#f0f7ff]"
+          >
+            Export
+          </button>
+        </div>
 
-        <aside className="space-y-4">
-          <article className="h-fit rounded-2xl border border-slate-200 bg-white p-5">
-            <p className="text-2xl font-semibold">Add New Product</p>
-            <Link
-              href="/dashboard/products/new"
-              className="mt-4 inline-block w-full rounded-xl bg-[#2ea2cc] px-4 py-2 text-center text-sm font-semibold text-white transition hover:bg-[#2387aa]"
-            >
-              Add New Product
-            </Link>
-          </article>
-
-          <article className="h-fit rounded-2xl border border-slate-200 bg-white p-5">
-            <p className="text-2xl font-semibold">Quick Summary</p>
-            <div className="mt-3 space-y-2 text-sm text-slate-600">
-              <p>
-                Published: <span className="font-semibold text-slate-800">{publishedCount}</span>
-              </p>
-              <p>
-                Drafts: <span className="font-semibold text-slate-800">{draftCount}</span>
-              </p>
-              <p>
-                Trash: <span className="font-semibold text-slate-800">{trashedCount}</span>
-              </p>
-            </div>
-          </article>
-        </aside>
-      </div>
+        <AdminProductsTable
+          products={products}
+          trashNotice={canShowUndoNotice
+            ? {
+              productId: trashedProductId,
+              undoUntil,
+              message: "1 product moved to the Trash.",
+            }
+            : undefined}
+          summary={{
+            publishedCount,
+            draftCount,
+            trashedCount,
+          }}
+        />
+      </article>
     </AdminShell>
   );
 }

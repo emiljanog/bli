@@ -8,6 +8,8 @@ import { UploadField } from "@/components/upload-field";
 import {
   updateBrandingSettingsAction,
   updateBrandThemeSettingsAction,
+  updateCheckoutPaymentSettingsAction,
+  updateCheckoutShippingSettingsAction,
   updateEmailSettingsAction,
   updateMenuSettingsAction,
 } from "@/app/dashboard/actions";
@@ -23,43 +25,7 @@ function tabHref(slug: SettingsTabSlug): string {
   return `/dashboard/settings/${slug}`;
 }
 
-function renderTabContent(tab: SettingsTabSlug) {
-  if (tab === "payments") {
-    return (
-      <div className="space-y-3">
-        {["Cash on Delivery", "Bank Transfer", "Stripe Card Payments", "PayPal"].map((method) => (
-          <label
-            key={method}
-            className="flex items-center justify-between rounded-xl border border-slate-200 px-4 py-3"
-          >
-            <span className="text-sm font-semibold text-slate-800">{method}</span>
-            <input type="checkbox" defaultChecked className="h-4 w-4 rounded border-slate-300" />
-          </label>
-        ))}
-      </div>
-    );
-  }
-
-  if (tab === "shipping") {
-    return (
-      <div className="space-y-3">
-        {[
-          "Albania - Standard (2-4 days)",
-          "Kosovo - Express (1-2 days)",
-          "EU - Economy (4-7 days)",
-        ].map((zone) => (
-          <div
-            key={zone}
-            className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700"
-          >
-            {zone}
-          </div>
-        ))}
-        <p className="text-xs font-medium text-slate-500">Tip: set free shipping threshold by zone.</p>
-      </div>
-    );
-  }
-
+function renderTabContent() {
   return (
     <div className="grid gap-4 md:grid-cols-2">
       <label className="space-y-1">
@@ -143,7 +109,7 @@ export default async function AdminSettingsTabPage({ params }: AdminSettingsTabP
         <p className="mt-1 text-sm text-slate-600">{active.description}</p>
 
         {active.slug === "general" ? (
-          <form action={updateBrandingSettingsAction} encType="multipart/form-data" className="mt-5 space-y-5">
+          <form action={updateBrandingSettingsAction} className="mt-5 space-y-5">
             <p className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
               Defaults are <code>/logo.svg</code> and <code>/favicon.ico</code> from the root web path.
             </p>
@@ -185,6 +151,23 @@ export default async function AdminSettingsTabPage({ params }: AdminSettingsTabP
                 />
                 <span className="block text-xs text-slate-500">
                   This width is used by all public pages for main content containers.
+                </span>
+              </label>
+              <label className="space-y-1">
+                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Media Upload Max Size (MB)
+                </span>
+                <input
+                  name="mediaUploadMaxMb"
+                  type="number"
+                  min={1}
+                  max={100}
+                  step={1}
+                  defaultValue={siteSettings.mediaUploadMaxMb}
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+                />
+                <span className="block text-xs text-slate-500">
+                  Set maximum size per image file for uploads. Example: 25 means 25 MB.
                 </span>
               </label>
             </div>
@@ -341,6 +324,176 @@ export default async function AdminSettingsTabPage({ params }: AdminSettingsTabP
                 className="rounded-xl site-primary-bg px-4 py-2 text-sm font-semibold text-white transition site-primary-bg-hover"
               >
                 Save Brand Settings
+              </button>
+            </div>
+          </form>
+        ) : active.slug === "payments" ? (
+          <form action={updateCheckoutPaymentSettingsAction} className="mt-5 space-y-5">
+            <div className="space-y-3">
+              <label className="flex items-center justify-between rounded-xl border border-slate-200 px-4 py-3">
+                <span className="text-sm font-semibold text-slate-800">CAD (Cash on Delivery)</span>
+                <input
+                  name="paymentCadEnabled"
+                  type="checkbox"
+                  defaultChecked={siteSettings.paymentCadEnabled}
+                  className="h-4 w-4 rounded border-slate-300"
+                />
+              </label>
+              <label className="flex items-center justify-between rounded-xl border border-slate-200 px-4 py-3">
+                <span className="text-sm font-semibold text-slate-800">Bank transfer</span>
+                <input
+                  name="paymentBankTransferEnabled"
+                  type="checkbox"
+                  defaultChecked={siteSettings.paymentBankTransferEnabled}
+                  className="h-4 w-4 rounded border-slate-300"
+                />
+              </label>
+              <label className="flex items-center justify-between rounded-xl border border-slate-200 px-4 py-3">
+                <span className="text-sm font-semibold text-slate-800">Stripe demo</span>
+                <input
+                  name="paymentStripeDemoEnabled"
+                  type="checkbox"
+                  defaultChecked={siteSettings.paymentStripeDemoEnabled}
+                  className="h-4 w-4 rounded border-slate-300"
+                />
+              </label>
+            </div>
+
+            <label className="space-y-1">
+              <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Bank transfer instructions
+              </span>
+              <textarea
+                name="paymentBankTransferInstructions"
+                rows={4}
+                defaultValue={siteSettings.paymentBankTransferInstructions}
+                className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+              />
+            </label>
+
+            <input type="hidden" name="redirectTo" value={tabHref(active.slug)} />
+
+            <div className="flex justify-start py-2">
+              <button
+                type="submit"
+                className="rounded-xl site-primary-bg px-4 py-2 text-sm font-semibold text-white transition site-primary-bg-hover"
+              >
+                Save Payment Settings
+              </button>
+            </div>
+          </form>
+        ) : active.slug === "shipping" ? (
+          <form action={updateCheckoutShippingSettingsAction} className="mt-5 space-y-5">
+            <div className="rounded-xl border border-slate-200 p-4">
+              <p className="text-sm font-semibold text-slate-900">Shipping Method 1</p>
+              <div className="mt-3 grid gap-4 md:grid-cols-2">
+                <label className="space-y-1">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Label</span>
+                  <input
+                    name="shippingStandardLabel"
+                    defaultValue={siteSettings.shippingStandardLabel}
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+                  />
+                </label>
+                <label className="space-y-1">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">ETA</span>
+                  <input
+                    name="shippingStandardEta"
+                    defaultValue={siteSettings.shippingStandardEta}
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+                  />
+                </label>
+              </div>
+              <div className="mt-3 grid gap-4 md:grid-cols-2">
+                <label className="space-y-1">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Price</span>
+                  <input
+                    name="shippingStandardPrice"
+                    type="number"
+                    min={0}
+                    step={0.01}
+                    defaultValue={siteSettings.shippingStandardPrice}
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+                  />
+                </label>
+                <label className="mt-7 flex items-center gap-2 text-sm font-semibold text-slate-800">
+                  <input
+                    name="shippingStandardEnabled"
+                    type="checkbox"
+                    defaultChecked={siteSettings.shippingStandardEnabled}
+                    className="h-4 w-4 rounded border-slate-300"
+                  />
+                  Enabled
+                </label>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-slate-200 p-4">
+              <p className="text-sm font-semibold text-slate-900">Shipping Method 2</p>
+              <div className="mt-3 grid gap-4 md:grid-cols-2">
+                <label className="space-y-1">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Label</span>
+                  <input
+                    name="shippingExpressLabel"
+                    defaultValue={siteSettings.shippingExpressLabel}
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+                  />
+                </label>
+                <label className="space-y-1">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">ETA</span>
+                  <input
+                    name="shippingExpressEta"
+                    defaultValue={siteSettings.shippingExpressEta}
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+                  />
+                </label>
+              </div>
+              <div className="mt-3 grid gap-4 md:grid-cols-2">
+                <label className="space-y-1">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Price</span>
+                  <input
+                    name="shippingExpressPrice"
+                    type="number"
+                    min={0}
+                    step={0.01}
+                    defaultValue={siteSettings.shippingExpressPrice}
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+                  />
+                </label>
+                <label className="mt-7 flex items-center gap-2 text-sm font-semibold text-slate-800">
+                  <input
+                    name="shippingExpressEnabled"
+                    type="checkbox"
+                    defaultChecked={siteSettings.shippingExpressEnabled}
+                    className="h-4 w-4 rounded border-slate-300"
+                  />
+                  Enabled
+                </label>
+              </div>
+            </div>
+
+            <label className="space-y-1">
+              <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Free shipping threshold (0 = disabled)
+              </span>
+              <input
+                name="shippingFreeThreshold"
+                type="number"
+                min={0}
+                step={0.01}
+                defaultValue={siteSettings.shippingFreeThreshold}
+                className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+              />
+            </label>
+
+            <input type="hidden" name="redirectTo" value={tabHref(active.slug)} />
+
+            <div className="flex justify-start py-2">
+              <button
+                type="submit"
+                className="rounded-xl site-primary-bg px-4 py-2 text-sm font-semibold text-white transition site-primary-bg-hover"
+              >
+                Save Shipping Settings
               </button>
             </div>
           </form>
@@ -529,7 +682,7 @@ export default async function AdminSettingsTabPage({ params }: AdminSettingsTabP
           />
         ) : (
           <>
-            <div className="mt-5">{renderTabContent(active.slug)}</div>
+            <div className="mt-5">{renderTabContent()}</div>
           </>
         )}
       </section>

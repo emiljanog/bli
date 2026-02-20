@@ -16,6 +16,7 @@ type AdminNotificationItem = {
 type AdminNotificationsMenuProps = {
   initialNotifications: AdminNotificationItem[];
   initialUnreadCount: number;
+  size?: "default" | "large";
 };
 
 function formatNotificationDate(value: string): string {
@@ -61,13 +62,54 @@ function playNotificationSound() {
 export function AdminNotificationsMenu({
   initialNotifications,
   initialUnreadCount,
+  size = "default",
 }: AdminNotificationsMenuProps) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const knownIdsRef = useRef<Set<string>>(new Set(initialNotifications.map((item) => item.id)));
   const [open, setOpen] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(false);
+  const [panelTop, setPanelTop] = useState(64);
   const [notifications, setNotifications] = useState<AdminNotificationItem[]>(initialNotifications);
   const [unreadCount, setUnreadCount] = useState(initialUnreadCount);
   const [isMarking, setIsMarking] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
+  const buttonSizeClass = size === "large" ? "h-[45px] w-[45px]" : "h-9 w-9";
+  const iconSizeClass = size === "large" ? "h-5 w-5" : "h-4 w-4";
+
+  useEffect(() => {
+    const media = window.matchMedia("(min-width: 768px)");
+    const apply = () => setIsDesktop(media.matches);
+    apply();
+
+    if (typeof media.addEventListener === "function") {
+      media.addEventListener("change", apply);
+      return () => media.removeEventListener("change", apply);
+    }
+
+    media.addListener(apply);
+    return () => media.removeListener(apply);
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const updatePanelTop = () => {
+      if (!rootRef.current) return;
+      const rect = rootRef.current.getBoundingClientRect();
+      const rawTop = Math.round(rect.bottom + 8);
+      const maxAllowedTop = Math.max(8, window.innerHeight - 80);
+      setPanelTop(Math.max(8, Math.min(rawTop, maxAllowedTop)));
+    };
+
+    updatePanelTop();
+    window.addEventListener("resize", updatePanelTop);
+    window.addEventListener("scroll", updatePanelTop, true);
+
+    return () => {
+      window.removeEventListener("resize", updatePanelTop);
+      window.removeEventListener("scroll", updatePanelTop, true);
+    };
+  }, [isDesktop, open]);
 
   useEffect(() => {
     let canceled = false;
@@ -144,6 +186,30 @@ export function AdminNotificationsMenu({
     }
   }
 
+  async function clearReadNotifications() {
+    if (isClearing) return;
+    setIsClearing(true);
+    try {
+      const response = await fetch("/api/admin/notifications", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+      });
+      const data = (await response.json().catch(() => null)) as
+        | { ok?: boolean; unreadCount?: number; notifications?: AdminNotificationItem[] }
+        | null;
+      if (!response.ok || !data?.ok) return;
+
+      const nextNotifications = Array.isArray(data.notifications) ? data.notifications : [];
+      setNotifications(nextNotifications);
+      setUnreadCount(Number.isFinite(data.unreadCount) ? Number(data.unreadCount) : 0);
+      nextNotifications.forEach((item) => knownIdsRef.current.add(item.id));
+    } finally {
+      setIsClearing(false);
+    }
+  }
+
+  const hasReadNotifications = notifications.some((item) => item.isRead);
+
   return (
     <div ref={rootRef} className="relative">
       <button
@@ -151,38 +217,56 @@ export function AdminNotificationsMenu({
         aria-label="Notifications"
         title="Notifications"
         onClick={() => setOpen((prev) => !prev)}
-        className="relative inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-full transition hover:bg-[var(--admin-hover-bg)] hover:text-[var(--admin-text)]"
+        className={`relative inline-flex ${buttonSizeClass} cursor-pointer items-center justify-center rounded-full transition hover:bg-[var(--admin-hover-bg)] hover:text-[var(--admin-text)]`}
       >
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={iconSizeClass}>
           <path d="M15 17h5l-1.4-1.4A2 2 0 0 1 18 14.2V11a6 6 0 1 0-12 0v3.2a2 2 0 0 1-.6 1.4L4 17h5" />
           <path d="M10 17a2 2 0 0 0 4 0" />
         </svg>
         {unreadCount > 0 ? (
-          <span className="absolute right-0 top-0 inline-flex h-4 min-w-4 -translate-y-1/3 translate-x-1/3 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-semibold leading-none text-white">
+          <span className="absolute bottom-0 right-0 inline-flex h-4 min-w-4 translate-x-1/3 translate-y-1/3 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-semibold leading-none text-white">
             {unreadCount > 99 ? "99+" : unreadCount}
           </span>
         ) : null}
       </button>
 
       <div
-        className={`absolute right-0 top-full z-[230] mt-2 w-80 overflow-hidden rounded-xl border border-[var(--admin-border)] bg-[var(--admin-panel-bg)] shadow-lg transition ${
+        className={`fixed z-[230] flex flex-col overflow-hidden rounded-xl border border-[var(--admin-border)] bg-[var(--admin-panel-bg)] shadow-lg transition ${
+          isDesktop ? "right-[50px] w-[400px]" : "left-[13px] right-[13px]"
+        } ${
           open ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"
         }`}
+        style={{
+          top: `${panelTop}px`,
+          height: isDesktop ? "60vh" : `calc(100dvh - ${panelTop}px)`,
+        }}
       >
-        <div className="flex items-center justify-between border-b border-[var(--admin-border)] px-3 py-2">
+        <div className="flex items-center justify-between gap-2 border-b border-[var(--admin-border)] px-3 py-2">
           <p className="text-sm font-semibold text-[var(--admin-text)]">Notifications</p>
-          {unreadCount > 0 ? (
-            <button
-              type="button"
-              onClick={markAllAsRead}
-              disabled={isMarking}
-              className="cursor-pointer rounded-md border border-[var(--admin-border)] px-2 py-1 text-[11px] font-semibold text-[var(--admin-muted)] transition hover:bg-[var(--admin-hover-bg)] hover:text-[var(--admin-text)] disabled:cursor-not-allowed disabled:opacity-70"
-            >
-              {isMarking ? "Saving..." : "Mark all read"}
-            </button>
-          ) : null}
+          <div className="flex items-center gap-1.5">
+            {unreadCount > 0 ? (
+              <button
+                type="button"
+                onClick={markAllAsRead}
+                disabled={isMarking}
+                className="cursor-pointer rounded-md border border-[var(--admin-border)] px-2 py-1 text-[11px] font-semibold text-[var(--admin-muted)] transition hover:bg-[var(--admin-hover-bg)] hover:text-[var(--admin-text)] disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {isMarking ? "Saving..." : "Mark all read"}
+              </button>
+            ) : null}
+            {hasReadNotifications ? (
+              <button
+                type="button"
+                onClick={clearReadNotifications}
+                disabled={isClearing}
+                className="cursor-pointer rounded-md border border-[var(--admin-border)] px-2 py-1 text-[11px] font-semibold text-[var(--admin-muted)] transition hover:bg-[var(--admin-hover-bg)] hover:text-[var(--admin-text)] disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {isClearing ? "Clearing..." : "Clear notifications"}
+              </button>
+            ) : null}
+          </div>
         </div>
-        <div className="max-h-80 overflow-y-auto p-2">
+        <div className="min-h-0 flex-1 overflow-y-auto p-2">
           {notifications.length === 0 ? (
             <p className="rounded-lg border border-dashed border-[var(--admin-border)] px-3 py-3 text-xs text-[var(--admin-muted)]">
               No notifications yet.

@@ -2,13 +2,37 @@ import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { ADMIN_COOKIE_NAME, ADMIN_SESSION_VALUE, ADMIN_USERNAME_COOKIE_NAME } from "@/lib/admin-auth";
-import { addOrder, addProduct, addSale, addUser, applyCoupon, findUserByUsername, listProducts } from "@/lib/shop-store";
+import {
+  addOrder,
+  addProduct,
+  addSale,
+  addUser,
+  applyCoupon,
+  findUserByUsername,
+  getSiteSettings,
+  listProducts,
+} from "@/lib/shop-store";
 
 type CheckoutItem = {
   id: string;
   name: string;
   price: number;
   quantity: number;
+};
+
+type ShippingMethodCode = "standard" | "express";
+type PaymentMethodCode = "cad" | "bank_transfer" | "stripe_demo";
+
+type CheckoutShippingOption = {
+  code: ShippingMethodCode;
+  label: string;
+  eta: string;
+  price: number;
+};
+
+type CheckoutPaymentOption = {
+  code: PaymentMethodCode;
+  label: string;
 };
 
 function asString(value: unknown): string {
@@ -43,6 +67,91 @@ function parseItems(input: unknown): CheckoutItem[] {
     .filter((item) => item.id && item.name && item.price > 0 && item.quantity > 0);
 }
 
+function getShippingOptions() {
+  const settings = getSiteSettings();
+  const options: CheckoutShippingOption[] = [];
+
+  if (settings.shippingStandardEnabled) {
+    options.push({
+      code: "standard",
+      label: settings.shippingStandardLabel,
+      eta: settings.shippingStandardEta,
+      price: Math.max(0, Number(settings.shippingStandardPrice) || 0),
+    });
+  }
+
+  if (settings.shippingExpressEnabled) {
+    options.push({
+      code: "express",
+      label: settings.shippingExpressLabel,
+      eta: settings.shippingExpressEta,
+      price: Math.max(0, Number(settings.shippingExpressPrice) || 0),
+    });
+  }
+
+  if (options.length === 0) {
+    options.push({
+      code: "standard",
+      label: "Standard shipping",
+      eta: "2-4 business days",
+      price: 0,
+    });
+  }
+
+  return {
+    freeThreshold: Math.max(0, Number(settings.shippingFreeThreshold) || 0),
+    methods: options,
+  };
+}
+
+function getPaymentOptions() {
+  const settings = getSiteSettings();
+  const methods: CheckoutPaymentOption[] = [];
+
+  if (settings.paymentCadEnabled) {
+    methods.push({
+      code: "cad",
+      label: "CAD (Cash on Delivery)",
+    });
+  }
+
+  if (settings.paymentBankTransferEnabled) {
+    methods.push({
+      code: "bank_transfer",
+      label: "Bank transfer",
+    });
+  }
+
+  if (settings.paymentStripeDemoEnabled) {
+    methods.push({
+      code: "stripe_demo",
+      label: "Stripe demo",
+    });
+  }
+
+  if (methods.length === 0) {
+    methods.push({
+      code: "stripe_demo",
+      label: "Stripe demo",
+    });
+  }
+
+  return {
+    methods,
+    bankTransferInstructions: settings.paymentBankTransferInstructions,
+  };
+}
+
+export async function GET() {
+  const shipping = getShippingOptions();
+  const payments = getPaymentOptions();
+
+  return NextResponse.json({
+    shipping,
+    payments,
+  });
+}
+
 export async function POST(request: Request) {
   try {
     const cookieStore = await cookies();
@@ -52,7 +161,12 @@ export async function POST(request: Request) {
     const phoneInput = asString(body.phone);
     const addressInput = asString(body.address);
     const cityInput = asString(body.city);
+    const stateInput = asString(body.state);
+    const zipInput = asString(body.zip);
+    const countryInput = asString(body.country);
     const couponCode = asString(body.couponCode);
+    const shippingMethodInput = asString(body.shippingMethod);
+    const paymentMethodInput = asString(body.paymentMethod);
     const createAccount = asBoolean(body.createAccount);
     const password = asString(body.password);
     const items = parseItems(body.items);
@@ -71,12 +185,30 @@ export async function POST(request: Request) {
     const phone = activeAuthenticatedUser?.phone || phoneInput;
     const address = activeAuthenticatedUser?.address || addressInput;
     const city = activeAuthenticatedUser?.city || cityInput;
+    const state = stateInput;
+    const zip = zipInput;
+    const country = countryInput;
 
-    if (!customerName || !email || !phone || !address || !city || items.length === 0) {
+    const shippingSettings = getShippingOptions();
+    const selectedShippingMethod =
+      shippingSettings.methods.find((method) => method.code === shippingMethodInput) ||
+      shippingSettings.methods[0];
+    const paymentSettings = getPaymentOptions();
+    const selectedPaymentMethod =
+      paymentSettings.methods.find((method) => method.code === paymentMethodInput) ||
+      paymentSettings.methods[0];
+
+    if (!customerName || !email || !phone || !address || !city || !country || items.length === 0) {
       return NextResponse.json(
         { error: "Te dhenat e checkout nuk jane te plota." },
         { status: 400 },
       );
+    }
+    if (!selectedShippingMethod) {
+      return NextResponse.json({ error: "No shipping method is available." }, { status: 400 });
+    }
+    if (!selectedPaymentMethod) {
+      return NextResponse.json({ error: "No payment method is available." }, { status: 400 });
     }
 
     if (!activeAuthenticatedUser && createAccount && password.length < 6) {
@@ -121,7 +253,11 @@ export async function POST(request: Request) {
     }
 
     const discount = couponResult.discount;
-    const total = Math.max(0, Number((subtotal - discount).toFixed(2)));
+    const shippingCost =
+      shippingSettings.freeThreshold > 0 && subtotal >= shippingSettings.freeThreshold
+        ? 0
+        : selectedShippingMethod.price;
+    const total = Math.max(0, Number((subtotal - discount + shippingCost).toFixed(2)));
 
     let allocatedDiscount = 0;
     for (let index = 0; index < items.length; index += 1) {
@@ -150,7 +286,7 @@ export async function POST(request: Request) {
       const itemTotal = Math.max(0, Number((itemSubtotal - itemDiscount).toFixed(2)));
 
       addOrder({
-        customer: customerName,
+        customer: `${customerName}${state || zip ? ` (${state || "State"} ${zip || ""})` : ""}`.trim(),
         userId: orderUserId,
         productId,
         quantity: item.quantity,
@@ -180,9 +316,13 @@ export async function POST(request: Request) {
       success: true,
       orderCount: items.length,
       subtotal,
+      shippingCost,
       discount,
       total,
       couponCode: couponResult.coupon?.code ?? null,
+      shippingMethod: selectedShippingMethod.code,
+      paymentMethod: selectedPaymentMethod.code,
+      country,
     });
   } catch {
     return NextResponse.json({ error: "Checkout deshtoi ne server." }, { status: 500 });

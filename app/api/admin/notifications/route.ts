@@ -8,6 +8,7 @@ import {
   resolveAdminRole,
 } from "@/lib/admin-auth";
 import {
+  clearReadAdminNotifications,
   countUnreadAdminNotifications,
   listAdminNotifications,
   markAllAdminNotificationsAsRead,
@@ -51,6 +52,21 @@ export async function POST() {
   return NextResponse.json({
     ok: true,
     updated,
+    unreadCount: countUnreadAdminNotifications(),
+    notifications: listAdminNotifications(14),
+  });
+}
+
+export async function DELETE() {
+  const authorized = await ensureAdminAuth();
+  if (!authorized) {
+    return NextResponse.json({ ok: false, message: "Unauthorized" }, { status: 401 });
+  }
+
+  const removed = clearReadAdminNotifications();
+  return NextResponse.json({
+    ok: true,
+    removed,
     unreadCount: countUnreadAdminNotifications(),
     notifications: listAdminNotifications(14),
   });

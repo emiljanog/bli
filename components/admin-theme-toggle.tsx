@@ -3,6 +3,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 type ThemeMode = "light" | "dark" | "system";
+type AdminThemeToggleProps = {
+  size?: "default" | "large";
+};
 
 const THEME_STORAGE_KEY = "bli-theme-mode";
 
@@ -21,7 +24,7 @@ function applyTheme(mode: ThemeMode) {
   root.setAttribute("data-theme", mode);
 }
 
-export function AdminThemeToggle() {
+export function AdminThemeToggle({ size = "default" }: AdminThemeToggleProps) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<ThemeMode>(() => {
@@ -63,6 +66,8 @@ export function AdminThemeToggle() {
   }, [open]);
 
   const effectiveTheme = useMemo(() => (mode === "system" ? systemTheme : mode), [mode, systemTheme]);
+  const buttonSizeClass = size === "large" ? "h-[45px] w-[45px]" : "h-9 w-9";
+  const iconSizeClass = size === "large" ? "h-5 w-5" : "h-4 w-4";
 
   return (
     <div ref={rootRef} className="relative">
@@ -71,18 +76,29 @@ export function AdminThemeToggle() {
         aria-label="Theme"
         title="Theme"
         onClick={() => setOpen((prev) => !prev)}
-        className="inline-flex h-9 w-9 items-center justify-center rounded-full transition hover:bg-[var(--admin-hover-bg)] hover:text-[var(--admin-text)]"
+        className={`inline-flex ${buttonSizeClass} items-center justify-center rounded-full transition hover:bg-[var(--admin-hover-bg)] hover:text-[var(--admin-text)]`}
       >
-        {effectiveTheme === "dark" ? (
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+        <span className={`relative block ${iconSizeClass}`}>
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            className={`absolute inset-0 ${iconSizeClass} transition ${effectiveTheme === "dark" ? "opacity-100" : "opacity-0"}`}
+          >
             <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" />
           </svg>
-        ) : (
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            className={`absolute inset-0 ${iconSizeClass} transition ${effectiveTheme === "dark" ? "opacity-0" : "opacity-100"}`}
+          >
             <circle cx="12" cy="12" r="4" />
             <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
           </svg>
-        )}
+        </span>
       </button>
 
       <div
@@ -101,11 +117,15 @@ export function AdminThemeToggle() {
             className="flex w-full items-center justify-between rounded-lg px-2 py-2 text-left text-sm font-semibold text-[var(--admin-text)] transition hover:bg-[var(--admin-hover-bg)]"
           >
             <span>{item === "light" ? "Light" : item === "dark" ? "Dark" : "System"}</span>
-            {mode === item ? (
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
-                <path d="m5 13 4 4L19 7" />
-              </svg>
-            ) : null}
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              className={`h-4 w-4 transition ${mode === item ? "opacity-100" : "opacity-0"}`}
+            >
+              <path d="m5 13 4 4L19 7" />
+            </svg>
           </button>
         ))}
       </div>

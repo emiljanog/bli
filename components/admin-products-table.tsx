@@ -8,6 +8,8 @@ import {
   restoreProductAction,
   setProductPublishStatusAction,
   trashProductAction,
+  updateProductPricingInlineAction,
+  updateProductStockInlineAction,
 } from "@/app/dashboard/actions";
 import type { PublicationStatus } from "@/lib/shop-store";
 
@@ -18,6 +20,7 @@ export type AdminProductRow = {
   category: string;
   tags: string[];
   price: number;
+  salePrice: number | null;
   stock: number;
   reviews: number;
   publishStatus: PublicationStatus;
@@ -26,6 +29,16 @@ export type AdminProductRow = {
 
 type AdminProductsTableProps = {
   products: AdminProductRow[];
+  trashNotice?: {
+    productId: string;
+    undoUntil: number;
+    message: string;
+  };
+  summary?: {
+    publishedCount: number;
+    draftCount: number;
+    trashedCount: number;
+  };
 };
 
 function formatCurrency(amount: number): string {
@@ -49,7 +62,7 @@ function safePageSize(value: unknown): number {
 type ProductFilter = "all" | "published" | "draft" | "trash";
 type ProductBulkAction = "publish" | "draft" | "trash" | "restore" | "delete_permanently";
 
-export function AdminProductsTable({ products }: AdminProductsTableProps) {
+export function AdminProductsTable({ products, trashNotice, summary }: AdminProductsTableProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<ProductFilter>("all");
   const [categoryFilter, setCategoryFilter] = useState("All");
@@ -58,6 +71,12 @@ export function AdminProductsTable({ products }: AdminProductsTableProps) {
   const [bulkAction, setBulkAction] = useState<ProductBulkAction>("publish");
   const [pageSize, setPageSize] = useState(15);
   const [currentPage, setCurrentPage] = useState(1);
+  const [editingPriceId, setEditingPriceId] = useState<string | null>(null);
+  const [editingStockId, setEditingStockId] = useState<string | null>(null);
+  const [priceInput, setPriceInput] = useState("");
+  const [salePriceInput, setSalePriceInput] = useState("");
+  const [stockInput, setStockInput] = useState("");
+  const [showTrashNotice, setShowTrashNotice] = useState(false);
   const headerCheckboxRef = useRef<HTMLInputElement>(null);
 
   const categories = useMemo(
@@ -70,13 +89,20 @@ export function AdminProductsTable({ products }: AdminProductsTableProps) {
   );
 
   const counts = useMemo(() => {
+    if (summary) {
+      return {
+        published: summary.publishedCount,
+        draft: summary.draftCount,
+        trash: summary.trashedCount,
+      };
+    }
     const published = products.filter(
       (product) => !product.trashedAt && product.publishStatus === "Published",
     ).length;
     const draft = products.filter((product) => !product.trashedAt && product.publishStatus === "Draft").length;
     const trash = products.filter((product) => Boolean(product.trashedAt)).length;
     return { published, draft, trash };
-  }, [products]);
+  }, [products, summary]);
 
   const filteredProducts = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -118,6 +144,33 @@ export function AdminProductsTable({ products }: AdminProductsTableProps) {
     }
   }, [partiallyChecked]);
 
+  useEffect(() => {
+    const syncTimer = setTimeout(() => {
+      setShowTrashNotice(Boolean(trashNotice));
+    }, 0);
+
+    if (!trashNotice) {
+      return () => clearTimeout(syncTimer);
+    }
+
+    const remainingMs = trashNotice.undoUntil - Date.now();
+    if (remainingMs <= 0) {
+      const hideNowTimer = setTimeout(() => setShowTrashNotice(false), 0);
+      return () => {
+        clearTimeout(syncTimer);
+        clearTimeout(hideNowTimer);
+      };
+    }
+
+    const hideTimer = setTimeout(() => {
+      setShowTrashNotice(false);
+    }, remainingMs);
+    return () => {
+      clearTimeout(syncTimer);
+      clearTimeout(hideTimer);
+    };
+  }, [trashNotice?.productId, trashNotice?.undoUntil]);
+
   function toggleAll(checked: boolean) {
     setSelectedIds((previous) => {
       const next = new Set(previous);
@@ -145,219 +198,273 @@ export function AdminProductsTable({ products }: AdminProductsTableProps) {
     filteredProducts.length === 0
       ? "No products found"
       : `Showing ${(safePage - 1) * pageSize + 1}-${Math.min(safePage * pageSize, filteredProducts.length)} of ${filteredProducts.length}`;
-
-  function renderControls(position: "top" | "bottom") {
-    return (
-      <div
-        className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2 ${
-          position === "top" ? "mb-3" : "mt-4"
-        }`}
-      >
-        <div className="flex flex-wrap items-center gap-3">
-          <p className="text-xs font-semibold text-slate-600">{showingText}</p>
-          <label className="inline-flex items-center gap-2 text-xs font-semibold text-slate-700">
-            <input
-              type="checkbox"
-              checked={allChecked}
-              onChange={(event) => toggleAll(event.target.checked)}
-              className="h-4 w-4 rounded border-slate-300"
-            />
-            Select all on page
-          </label>
-          <span className="text-xs font-semibold text-slate-500">Selected: {selectedIds.length}</span>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <form action={bulkProductAction} className="inline-flex items-center gap-2">
-            <input type="hidden" name="selectedProductIds" value={selectedIds.join(",")} />
-            <input type="hidden" name="redirectTo" value="/dashboard/products" />
-            <select
-              name="bulkAction"
-              value={bulkAction}
-              onChange={(event) => setBulkAction(event.target.value as ProductBulkAction)}
-              className="h-9 rounded-lg border border-slate-300 bg-white px-2 text-sm font-semibold text-slate-700"
-            >
-              <option value="publish">Publish</option>
-              <option value="draft">Set Draft</option>
-              <option value="trash">Move to Trash</option>
-              <option value="restore">Restore</option>
-              <option value="delete_permanently">Delete Permanently</option>
-            </select>
-            <button
-              type="submit"
-              disabled={selectedIds.length === 0}
-              className="h-9 rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Update
-            </button>
-          </form>
-
-          <label className="inline-flex items-center gap-2 text-sm font-semibold text-slate-700">
-            Per page
-            <select
-              value={pageSize}
-              onChange={(event) => {
-                setPageSize(safePageSize(event.target.value));
-                setCurrentPage(1);
-              }}
-              className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-sm font-semibold text-slate-700"
-            >
-              <option value={15}>15</option>
-              <option value={30}>30</option>
-              <option value={50}>50</option>
-              <option value={100}>100</option>
-            </select>
-          </label>
-
-          <button
-            type="button"
-            onClick={() => setCurrentPage((page) => Math.max(1, Math.min(page, totalPages) - 1))}
-            disabled={safePage <= 1}
-            className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            Previous
-          </button>
-          <span className="text-xs font-semibold text-slate-600">
-            Page {safePage} / {totalPages}
-          </span>
-          <button
-            type="button"
-            onClick={() => setCurrentPage((page) => Math.min(totalPages, Math.min(page, totalPages) + 1))}
-            disabled={safePage >= totalPages}
-            className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            Next
-          </button>
-        </div>
-      </div>
-    );
-  }
+  const canPrev = safePage > 1;
+  const canNext = safePage < totalPages;
 
   return (
-    <div>
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        <button
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
           type="button"
           onClick={() => {
             setStatusFilter("all");
             setCurrentPage(1);
           }}
-          className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+          className={`font-semibold transition ${
             statusFilter === "all"
-              ? "border-slate-900 bg-slate-900 text-white"
-              : "border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
+              ? "text-slate-900"
+              : "text-[#2271b1] hover:text-[#1a5a8f]"
           }`}
         >
-          All Products: {products.length}
+          All ({products.length})
         </button>
+        <span className="text-slate-400">|</span>
         <button
           type="button"
           onClick={() => {
             setStatusFilter("published");
             setCurrentPage(1);
           }}
-          className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+          className={`font-semibold transition ${
             statusFilter === "published"
-              ? "site-primary-border site-primary-bg text-white"
-              : "border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
+              ? "text-slate-900"
+              : "text-[#2271b1] hover:text-[#1a5a8f]"
           }`}
         >
-          Published: {counts.published}
+          Published ({counts.published})
         </button>
+        <span className="text-slate-400">|</span>
         <button
           type="button"
           onClick={() => {
             setStatusFilter("draft");
             setCurrentPage(1);
           }}
-          className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+          className={`font-semibold transition ${
             statusFilter === "draft"
-              ? "site-primary-border site-primary-bg text-white"
-              : "border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
+              ? "text-slate-900"
+              : "text-[#2271b1] hover:text-[#1a5a8f]"
           }`}
         >
-          Drafts: {counts.draft}
+          Draft ({counts.draft})
         </button>
+        <span className="text-slate-400">|</span>
         <button
           type="button"
           onClick={() => {
             setStatusFilter("trash");
             setCurrentPage(1);
           }}
-          className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+          className={`font-semibold transition ${
             statusFilter === "trash"
-              ? "site-primary-border site-primary-bg text-white"
-              : "border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
+              ? "text-slate-900"
+              : "text-[#2271b1] hover:text-[#1a5a8f]"
           }`}
         >
-          Trash: {counts.trash}
+          Trash ({counts.trash})
         </button>
+        <span className="text-slate-400">|</span>
+        <button
+          type="button"
+          onClick={() => setCurrentPage(1)}
+          className="font-semibold text-[#2271b1] transition hover:text-[#1a5a8f]"
+        >
+          Sorting
+        </button>
+        </div>
+
+        {showTrashNotice && trashNotice ? (
+          <div className="flex items-center gap-1 text-sm font-semibold text-slate-800">
+            <span>{trashNotice.message}</span>
+            <form action={restoreProductAction}>
+              <input type="hidden" name="productId" value={trashNotice.productId} />
+              <input type="hidden" name="redirectTo" value="/dashboard/products" />
+              <button
+                type="submit"
+                className="cursor-pointer text-sm font-semibold text-slate-900 underline underline-offset-2 transition hover:text-slate-700"
+              >
+                Undo
+              </button>
+            </form>
+          </div>
+        ) : null}
       </div>
 
-      <div className="mb-3 rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <input
-            value={searchQuery}
-            onChange={(event) => {
-              setSearchQuery(event.target.value);
-              setCurrentPage(1);
-            }}
-            type="text"
-            placeholder="Search products..."
-            className="h-9 w-60 rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-800 outline-none transition focus:border-slate-500"
-          />
-          {searchQuery.trim() ? (
-            <button
-              type="button"
-              onClick={() => {
-                setSearchQuery("");
+      <div className="rounded-xl border border-slate-300 bg-[#f3f3f3] p-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <form action={bulkProductAction} className="inline-flex items-center gap-2">
+              <input type="hidden" name="selectedProductIds" value={selectedIds.join(",")} />
+              <input type="hidden" name="redirectTo" value="/dashboard/products" />
+              <select
+                name="bulkAction"
+                value={bulkAction}
+                onChange={(event) => setBulkAction(event.target.value as ProductBulkAction)}
+                className="h-10 min-w-[130px] rounded-md border border-slate-400 bg-white px-2 text-sm text-slate-800"
+              >
+                <option value="publish">Bulk actions</option>
+                <option value="draft">Set Draft</option>
+                <option value="trash">Move to Trash</option>
+                <option value="restore">Restore</option>
+                <option value="delete_permanently">Delete Permanently</option>
+              </select>
+              <button
+                type="submit"
+                disabled={selectedIds.length === 0}
+                className="h-10 rounded-md border border-[#2271b1] bg-white px-4 text-sm font-semibold text-[#2271b1] transition hover:bg-[#f0f7ff] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Apply
+              </button>
+            </form>
+
+            <select
+              value={categoryFilter}
+              onChange={(event) => {
+                setCategoryFilter(event.target.value);
                 setCurrentPage(1);
               }}
-              className="h-9 rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
+              className="h-10 min-w-[220px] rounded-md border border-slate-400 bg-white px-2 text-sm text-slate-800"
             >
-              Clear
+              <option value="All">Select a category</option>
+              {categories.map((category) => (
+                <option key={category} value={category}>
+                  {category}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={statusFilter}
+              onChange={(event) => {
+                setStatusFilter(event.target.value as ProductFilter);
+                setCurrentPage(1);
+              }}
+              className="h-10 min-w-[190px] rounded-md border border-slate-400 bg-white px-2 text-sm text-slate-800"
+            >
+              <option value="all">Filter by stock status</option>
+              <option value="published">Published</option>
+              <option value="draft">Draft</option>
+              <option value="trash">Trash</option>
+            </select>
+
+            <select
+              value={tagFilter}
+              onChange={(event) => {
+                setTagFilter(event.target.value);
+                setCurrentPage(1);
+              }}
+              className="h-10 min-w-[170px] rounded-md border border-slate-400 bg-white px-2 text-sm text-slate-800"
+            >
+              <option value="All">Filter by brand</option>
+              {tags.map((tag) => (
+                <option key={tag} value={tag}>
+                  {tag}
+                </option>
+              ))}
+            </select>
+
+            <button
+              type="button"
+              onClick={() => setCurrentPage(1)}
+              className="h-10 rounded-md border border-[#2271b1] bg-white px-4 text-sm font-semibold text-[#2271b1] transition hover:bg-[#f0f7ff]"
+            >
+              Filter
             </button>
-          ) : null}
-          <select
-            value={categoryFilter}
-            onChange={(event) => {
-              setCategoryFilter(event.target.value);
-              setCurrentPage(1);
-            }}
-            className="h-9 rounded-lg border border-slate-300 bg-white px-2 text-sm font-semibold text-slate-700"
-          >
-            <option value="All">All Categories</option>
-            {categories.map((category) => (
-              <option key={category} value={category}>
-                {category}
-              </option>
-            ))}
-          </select>
-          <select
-            value={tagFilter}
-            onChange={(event) => {
-              setTagFilter(event.target.value);
-              setCurrentPage(1);
-            }}
-            className="h-9 rounded-lg border border-slate-300 bg-white px-2 text-sm font-semibold text-slate-700"
-          >
-            <option value="All">All Tags</option>
-            {tags.map((tag) => (
-              <option key={tag} value={tag}>
-                {tag}
-              </option>
-            ))}
-          </select>
+          </div>
+
+          <div className="relative">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500"
+            >
+              <circle cx="11" cy="11" r="7" />
+              <path d="m20 20-3.5-3.5" />
+            </svg>
+            <input
+              value={searchQuery}
+              onChange={(event) => {
+                setSearchQuery(event.target.value);
+                setCurrentPage(1);
+              }}
+              type="text"
+              placeholder="Search products"
+              className="h-10 w-64 rounded-md border border-slate-400 bg-white pl-9 pr-3 text-sm text-slate-800 outline-none transition focus:border-[#2271b1]"
+            />
+          </div>
         </div>
       </div>
 
-      {renderControls("top")}
+      <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-slate-700">
+        <div className="flex flex-wrap items-center gap-3">
+          <span>Selected: {selectedIds.length}</span>
+          <label className="inline-flex items-center gap-2">
+            Per page
+          <select
+            value={pageSize}
+            onChange={(event) => {
+              setPageSize(safePageSize(event.target.value));
+              setCurrentPage(1);
+            }}
+            className="rounded-md border border-slate-400 bg-white px-2 py-1 text-xs text-slate-800"
+          >
+            <option value={15}>15</option>
+            <option value={30}>30</option>
+            <option value={50}>50</option>
+            <option value={100}>100</option>
+          </select>
+          </label>
+          <span>{showingText}</span>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-slate-700">{filteredProducts.length} items</span>
+          <button
+            type="button"
+            onClick={() => setCurrentPage(1)}
+            disabled={!canPrev}
+            className="h-8 w-8 rounded border border-slate-400 bg-white text-sm text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {"<<"}
+          </button>
+          <button
+            type="button"
+            onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+            disabled={!canPrev}
+            className="h-8 w-8 rounded border border-slate-400 bg-white text-sm text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {"<"}
+          </button>
+          <span className="inline-flex h-8 min-w-[86px] items-center justify-center rounded border border-slate-400 bg-white px-2 text-sm text-slate-800">
+            {safePage} of {totalPages}
+          </span>
+          <button
+            type="button"
+            onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+            disabled={!canNext}
+            className="h-8 w-8 rounded border border-[#2271b1] bg-white text-sm text-[#2271b1] transition hover:bg-[#f0f7ff] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {">"}
+          </button>
+          <button
+            type="button"
+            onClick={() => setCurrentPage(totalPages)}
+            disabled={!canNext}
+            className="h-8 w-8 rounded border border-[#2271b1] bg-white text-sm text-[#2271b1] transition hover:bg-[#f0f7ff] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {">>"}
+          </button>
+        </div>
+      </div>
 
       <div className="overflow-x-auto">
-        <table className="min-w-full text-left text-sm">
+        <table className="min-w-full border border-slate-300 bg-white text-left text-sm">
           <thead>
-            <tr className="border-b border-slate-200 text-slate-500">
-              <th className="pb-2 pr-3 font-medium">
+            <tr className="border-b border-slate-300 bg-slate-50 text-slate-600">
+              <th className="px-3 py-2 pr-3 font-medium">
                 <input
                   ref={headerCheckboxRef}
                   type="checkbox"
@@ -367,16 +474,16 @@ export function AdminProductsTable({ products }: AdminProductsTableProps) {
                   aria-label="Select all products"
                 />
               </th>
-              <th className="pb-2 font-medium">ID</th>
-              <th className="pb-2 font-medium">Name</th>
-              <th className="pb-2 font-medium">URL</th>
-              <th className="pb-2 font-medium">Category</th>
-              <th className="pb-2 font-medium">Tags</th>
-              <th className="pb-2 font-medium">Price</th>
-              <th className="pb-2 font-medium">Stock</th>
-              <th className="pb-2 font-medium">Reviews</th>
-              <th className="pb-2 font-medium">Status</th>
-              <th className="pb-2 font-medium">Actions</th>
+              <th className="px-3 py-2 font-medium">ID</th>
+              <th className="px-3 py-2 font-medium">Name</th>
+              <th className="px-3 py-2 font-medium">URL</th>
+              <th className="px-3 py-2 font-medium">Category</th>
+              <th className="px-3 py-2 font-medium">Tags</th>
+              <th className="px-3 py-2 font-medium">Price</th>
+              <th className="px-3 py-2 font-medium">Stock</th>
+              <th className="px-3 py-2 font-medium">Reviews</th>
+              <th className="px-3 py-2 font-medium">Status</th>
+              <th className="px-3 py-2 font-medium">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -387,9 +494,9 @@ export function AdminProductsTable({ products }: AdminProductsTableProps) {
               return (
                 <tr
                   key={product.id}
-                  className={`border-b border-slate-100 align-top ${isSelected ? "bg-slate-50" : ""}`}
+                  className={`border-b border-slate-200 align-top ${isSelected ? "bg-slate-50" : ""}`}
                 >
-                  <td className="py-3 pr-3">
+                  <td className="px-3 py-3 pr-3">
                     <input
                       type="checkbox"
                       checked={isSelected}
@@ -398,21 +505,122 @@ export function AdminProductsTable({ products }: AdminProductsTableProps) {
                       aria-label={`Select product ${product.name}`}
                     />
                   </td>
-                  <td className="py-3 font-semibold">
+                  <td className="px-3 py-3 font-semibold">
                     <Link href={`/dashboard/products/${product.id}`} className="hover:underline">
                       {product.id}
                     </Link>
                   </td>
-                  <td className="py-3">{product.name}</td>
-                  <td className="py-3 text-xs text-slate-600">/product/{product.slug}</td>
-                  <td className="py-3">{product.category}</td>
-                  <td className="py-3 text-xs text-slate-600">
+                  <td className="px-3 py-3">{product.name}</td>
+                  <td className="px-3 py-3 text-xs text-slate-600">/product/{product.slug}</td>
+                  <td className="px-3 py-3">{product.category}</td>
+                  <td className="px-3 py-3 text-xs text-slate-600">
                     {product.tags.length > 0 ? product.tags.join(", ") : "-"}
                   </td>
-                  <td className="py-3">{formatCurrency(product.price)}</td>
-                  <td className="py-3">{product.stock}</td>
-                  <td className="py-3">{product.reviews}</td>
-                  <td className="py-3">
+                  <td className="px-3 py-3">
+                    {editingPriceId === product.id ? (
+                      <form action={updateProductPricingInlineAction} className="space-y-2">
+                        <input type="hidden" name="productId" value={product.id} />
+                        <input type="hidden" name="redirectTo" value="/dashboard/products" />
+                        <input
+                          name="price"
+                          type="number"
+                          min="0"
+                          value={priceInput}
+                          onChange={(event) => setPriceInput(event.target.value)}
+                          className="h-8 w-24 rounded-md border border-slate-300 bg-white px-2 text-xs outline-none focus:border-[#2271b1]"
+                        />
+                        <input
+                          name="salePrice"
+                          type="number"
+                          min="0"
+                          value={salePriceInput}
+                          onChange={(event) => setSalePriceInput(event.target.value)}
+                          placeholder="sale"
+                          className="h-8 w-24 rounded-md border border-slate-300 bg-white px-2 text-xs outline-none focus:border-[#2271b1]"
+                        />
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="submit"
+                            className="rounded border border-[#2271b1] bg-white px-2 py-1 text-[11px] font-semibold text-[#2271b1] transition hover:bg-[#f0f7ff]"
+                          >
+                            Save
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditingPriceId(null)}
+                            className="rounded border border-slate-300 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 transition hover:bg-slate-100"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </form>
+                    ) : (
+                      <div className="space-y-1">
+                        <p className="text-sm font-semibold text-slate-900">{formatCurrency(product.price)}</p>
+                        {product.salePrice && product.salePrice > 0 && product.salePrice < product.price ? (
+                          <p className="text-xs font-semibold text-emerald-700">Sale: {formatCurrency(product.salePrice)}</p>
+                        ) : null}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingPriceId(product.id);
+                            setPriceInput(String(product.price));
+                            setSalePriceInput(product.salePrice ? String(product.salePrice) : "");
+                          }}
+                          className="rounded border border-slate-300 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 transition hover:bg-slate-100"
+                        >
+                          Edit
+                        </button>
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-3 py-3">
+                    {editingStockId === product.id ? (
+                      <form action={updateProductStockInlineAction} className="space-y-2">
+                        <input type="hidden" name="productId" value={product.id} />
+                        <input type="hidden" name="redirectTo" value="/dashboard/products" />
+                        <input
+                          name="stock"
+                          type="number"
+                          min="0"
+                          value={stockInput}
+                          onChange={(event) => setStockInput(event.target.value)}
+                          className="h-8 w-20 rounded-md border border-slate-300 bg-white px-2 text-xs outline-none focus:border-[#2271b1]"
+                        />
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="submit"
+                            className="rounded border border-[#2271b1] bg-white px-2 py-1 text-[11px] font-semibold text-[#2271b1] transition hover:bg-[#f0f7ff]"
+                          >
+                            Save
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditingStockId(null)}
+                            className="rounded border border-slate-300 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 transition hover:bg-slate-100"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </form>
+                    ) : (
+                      <div className="space-y-1">
+                        <p className="text-sm font-semibold text-slate-900">{product.stock}</p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingStockId(product.id);
+                            setStockInput(String(product.stock));
+                          }}
+                          className="rounded border border-slate-300 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 transition hover:bg-slate-100"
+                        >
+                          Edit
+                        </button>
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-3 py-3">{product.reviews}</td>
+                  <td className="px-3 py-3">
                     <span
                       className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${
                         isTrashed
@@ -425,7 +633,7 @@ export function AdminProductsTable({ products }: AdminProductsTableProps) {
                       {statusLabel}
                     </span>
                   </td>
-                  <td className="py-3">
+                  <td className="px-3 py-3">
                     <div className="flex flex-wrap gap-2">
                       <Link
                         href={`/dashboard/products/${product.id}`}
@@ -490,11 +698,16 @@ export function AdminProductsTable({ products }: AdminProductsTableProps) {
                 </tr>
               );
             })}
+            {pagedProducts.length === 0 ? (
+              <tr>
+                <td colSpan={11} className="px-3 py-8 text-center text-sm text-slate-500">
+                  No products match the selected filters.
+                </td>
+              </tr>
+            ) : null}
           </tbody>
         </table>
       </div>
-
-      {renderControls("bottom")}
     </div>
   );
 }

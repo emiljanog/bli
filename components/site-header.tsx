@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { logoutAdminAction } from "@/app/dashboard/actions";
+import { AdminBlackToolbar } from "@/components/admin-black-toolbar";
 import type { SiteSettings } from "@/lib/shop-store";
 import { getCartCount, subscribeCartUpdates } from "@/lib/cart";
 
@@ -15,6 +16,11 @@ type SiteHeaderProps = {
     avatarUrl: string;
     profileHref: string;
   } | null;
+  accountUser?: {
+    username: string;
+    displayName: string;
+    avatarUrl: string;
+  } | null;
 };
 
 function withAssetVersion(url: string, version: number): string {
@@ -24,98 +30,14 @@ function withAssetVersion(url: string, version: number): string {
   return `${safeUrl}${sep}v=${Math.max(1, Math.floor(version || 1))}`;
 }
 
-type ToolbarLinkItem = {
-  label: string;
-  href: string;
+type ProductSearchResult = {
+  id: string;
+  slug: string;
+  name: string;
+  image: string;
+  category: string;
+  price: number;
 };
-
-type ToolbarDropdownProps = {
-  label: string;
-  items: ToolbarLinkItem[];
-  href?: string;
-  className?: string;
-  icon?: ReactNode;
-};
-
-function ToolbarDropdown({ label, items, href, className = "", icon = null }: ToolbarDropdownProps) {
-  const [open, setOpen] = useState(false);
-  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const handleOpen = () => {
-    if (closeTimerRef.current) {
-      clearTimeout(closeTimerRef.current);
-      closeTimerRef.current = null;
-    }
-    setOpen(true);
-  };
-
-  const handleCloseWithDelay = () => {
-    if (closeTimerRef.current) {
-      clearTimeout(closeTimerRef.current);
-    }
-    closeTimerRef.current = setTimeout(() => {
-      setOpen(false);
-      closeTimerRef.current = null;
-    }, 260);
-  };
-
-  useEffect(() => {
-    return () => {
-      if (closeTimerRef.current) {
-        clearTimeout(closeTimerRef.current);
-      }
-    };
-  }, []);
-
-  return (
-    <div className={`relative ${className}`} onMouseEnter={handleOpen} onMouseLeave={handleCloseWithDelay}>
-      {href ? (
-        <Link href={href} className="inline-flex items-center gap-1 rounded px-2 py-0.5 transition hover:bg-white/18">
-          {icon}
-          <span>{label}</span>
-        </Link>
-      ) : (
-        <button
-          type="button"
-          aria-haspopup="menu"
-          className="inline-flex items-center gap-1 rounded px-2 py-0.5 transition hover:bg-white/18"
-        >
-          {icon}
-          <span>{label}</span>
-        </button>
-      )}
-      <div
-        className={`absolute left-0 top-[calc(100%+6px)] z-[180] min-w-[180px] rounded-b-md border border-slate-800 bg-black p-1.5 text-white shadow-xl transition duration-150 ${
-          open ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"
-        }`}
-      >
-        {items.map((item) => (
-          <Link
-            key={item.href}
-            href={item.href}
-            className="block rounded px-2 py-1.5 text-xs font-semibold transition hover:bg-white/15"
-            onClick={() => setOpen(false)}
-          >
-            {item.label}
-          </Link>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-const DASHBOARD_MENU: ToolbarLinkItem[] = [
-  { label: "Settings", href: "/dashboard/settings/general" },
-  { label: "Store", href: "/dashboard/products" },
-];
-
-const NEW_MENU: ToolbarLinkItem[] = [
-  { label: "New Product", href: "/dashboard/products/new" },
-  { label: "New Page", href: "/dashboard/pages/new" },
-  { label: "New User", href: "/dashboard/users" },
-  { label: "New Media", href: "/dashboard/media/new" },
-  { label: "New Order", href: "/dashboard/orders" },
-];
 
 function toPathSegments(pathname: string): string[] {
   return pathname
@@ -155,14 +77,23 @@ function getQuickEditHref(pathname: string): string | null {
   return null;
 }
 
-export function SiteHeader({ siteSettings, adminToolbar = null }: SiteHeaderProps) {
+export function SiteHeader({ siteSettings, adminToolbar = null, accountUser = null }: SiteHeaderProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const menuItems = siteSettings.headerMenu;
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const [cartCount, setCartCount] = useState(0);
-  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
-  const accountCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [siteAccountMenuOpen, setSiteAccountMenuOpen] = useState(false);
+  const [isDesktopViewport, setIsDesktopViewport] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchValue, setSearchValue] = useState("");
+  const [searchResults, setSearchResults] = useState<ProductSearchResult[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchError, setSearchError] = useState("");
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const siteAccountCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const siteAccountRootRef = useRef<HTMLDivElement | null>(null);
   const quickEditHref = useMemo(() => getQuickEditHref(pathname), [pathname]);
 
   useEffect(() => {
@@ -173,102 +104,184 @@ export function SiteHeader({ siteSettings, adminToolbar = null }: SiteHeaderProp
   }, []);
 
   useEffect(() => {
-    const syncCartCount = () => setCartCount(getCartCount());
-    syncCartCount();
-    return subscribeCartUpdates(syncCartCount);
+    let canceled = false;
+
+    const syncCartCount = async () => {
+      const count = await getCartCount();
+      if (!canceled) {
+        setCartCount(count);
+      }
+    };
+
+    void syncCartCount();
+    const unsubscribe = subscribeCartUpdates(() => {
+      void syncCartCount();
+    });
+
+    return () => {
+      canceled = true;
+      unsubscribe();
+    };
   }, []);
 
   useEffect(() => {
     return () => {
-      if (accountCloseTimerRef.current) {
-        clearTimeout(accountCloseTimerRef.current);
+      if (siteAccountCloseTimerRef.current) {
+        clearTimeout(siteAccountCloseTimerRef.current);
       }
     };
   }, []);
 
-  const handleAccountOpen = () => {
-    if (accountCloseTimerRef.current) {
-      clearTimeout(accountCloseTimerRef.current);
-      accountCloseTimerRef.current = null;
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(min-width: 768px)");
+
+    const handleViewportChange = (event: MediaQueryListEvent | MediaQueryList) => {
+      const desktop = "matches" in event ? event.matches : mediaQuery.matches;
+      setIsDesktopViewport(desktop);
+      if (!desktop) {
+        if (siteAccountCloseTimerRef.current) {
+          clearTimeout(siteAccountCloseTimerRef.current);
+          siteAccountCloseTimerRef.current = null;
+        }
+      }
+    };
+
+    handleViewportChange(mediaQuery);
+    if (typeof mediaQuery.addEventListener === "function") {
+      mediaQuery.addEventListener("change", handleViewportChange);
+      return () => mediaQuery.removeEventListener("change", handleViewportChange);
     }
-    setAccountMenuOpen(true);
+
+    mediaQuery.addListener(handleViewportChange);
+    return () => mediaQuery.removeListener(handleViewportChange);
+  }, []);
+
+  useEffect(() => {
+    setSiteAccountMenuOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!siteAccountMenuOpen) return;
+
+    const handleDocumentClick = (event: MouseEvent) => {
+      if (!siteAccountRootRef.current) return;
+      const target = event.target;
+      if (target instanceof Node && siteAccountRootRef.current.contains(target)) {
+        return;
+      }
+      setSiteAccountMenuOpen(false);
+    };
+
+    document.addEventListener("mousedown", handleDocumentClick);
+    return () => document.removeEventListener("mousedown", handleDocumentClick);
+  }, [siteAccountMenuOpen]);
+
+  useEffect(() => {
+    if (!searchOpen) return;
+    const timer = setTimeout(() => searchInputRef.current?.focus(), 10);
+    return () => clearTimeout(timer);
+  }, [searchOpen]);
+
+  useEffect(() => {
+    if (!searchOpen) {
+      setSearchLoading(false);
+      setSearchError("");
+      setSearchResults([]);
+      return;
+    }
+
+    const query = searchValue.trim();
+    if (!query) {
+      setSearchLoading(false);
+      setSearchError("");
+      setSearchResults([]);
+      return;
+    }
+
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      setSearchLoading(true);
+      setSearchError("");
+      try {
+        const response = await fetch(`/api/search/products?q=${encodeURIComponent(query)}&limit=6`, {
+          method: "GET",
+          signal: controller.signal,
+          cache: "no-store",
+        });
+
+        if (!response.ok) {
+          throw new Error("Search failed");
+        }
+
+        const payload = (await response.json()) as { results?: ProductSearchResult[] };
+        if (!controller.signal.aborted) {
+          setSearchResults(Array.isArray(payload.results) ? payload.results : []);
+        }
+      } catch {
+        if (!controller.signal.aborted) {
+          setSearchError("Search is temporarily unavailable.");
+          setSearchResults([]);
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setSearchLoading(false);
+        }
+      }
+    }, 140);
+
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [searchOpen, searchValue]);
+
+  const handleSiteAccountOpenDesktop = () => {
+    if (!isDesktopViewport || !accountUser) return;
+    if (siteAccountCloseTimerRef.current) {
+      clearTimeout(siteAccountCloseTimerRef.current);
+      siteAccountCloseTimerRef.current = null;
+    }
+    setSiteAccountMenuOpen(true);
   };
 
-  const handleAccountCloseWithDelay = () => {
-    if (accountCloseTimerRef.current) {
-      clearTimeout(accountCloseTimerRef.current);
+  const handleSiteAccountCloseDesktop = () => {
+    if (!isDesktopViewport || !accountUser) return;
+    if (siteAccountCloseTimerRef.current) {
+      clearTimeout(siteAccountCloseTimerRef.current);
     }
-    accountCloseTimerRef.current = setTimeout(() => {
-      setAccountMenuOpen(false);
-      accountCloseTimerRef.current = null;
-    }, 260);
+    siteAccountCloseTimerRef.current = setTimeout(() => {
+      setSiteAccountMenuOpen(false);
+      siteAccountCloseTimerRef.current = null;
+    }, 220);
+  };
+
+  const handleSiteAccountToggleClick = () => {
+    if (!accountUser) return;
+    setSiteAccountMenuOpen((open) => !open);
   };
 
   const logoSrc = withAssetVersion(siteSettings.logoUrl, siteSettings.brandingVersion);
   const hasLogo = siteSettings.logoUrl.trim().length > 0;
+  const accountInitial = accountUser?.displayName?.trim().charAt(0).toUpperCase() || "U";
+
+  function handleSearchSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const term = searchValue.trim();
+    const target = term ? `/shop?search=${encodeURIComponent(term)}` : "/shop";
+    router.push(target);
+    setSearchOpen(false);
+  }
 
   return (
     <div className="sticky top-0 z-[110]">
       {adminToolbar ? (
-        <div className="w-full bg-black text-white shadow-sm">
-          <div className="flex w-full items-center justify-between gap-2 px-3 py-1 text-[12px] md:px-4">
-            <div className="flex min-w-0 items-center gap-1.5 font-medium">
-              <ToolbarDropdown label="Dashboard" href="/dashboard" items={DASHBOARD_MENU} />
-              <ToolbarDropdown
-                label="New"
-                items={NEW_MENU}
-                icon={
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" className="h-4.5 w-4.5">
-                    <path d="M12 5v14M5 12h14" />
-                  </svg>
-                }
-              />
-              {quickEditHref ? (
-                <Link href={quickEditHref} className="inline-flex items-center gap-1 rounded px-2 py-0.5 transition hover:bg-white/15">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5">
-                    <path d="M12 20h9" />
-                    <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" />
-                  </svg>
-                  <span>Edit</span>
-                </Link>
-              ) : null}
-            </div>
-
-            <div className="relative shrink-0" onMouseEnter={handleAccountOpen} onMouseLeave={handleAccountCloseWithDelay}>
-              <button type="button" className="inline-flex items-center gap-1.5 rounded px-1 py-0.5 text-xs font-medium transition hover:bg-white/10">
-                <span className="inline-flex h-5 w-5 items-center justify-center overflow-hidden rounded-full bg-slate-200 text-[10px] font-semibold text-slate-700">
-                  {adminToolbar.avatarUrl ? (
-                    <img src={adminToolbar.avatarUrl} alt={`${adminToolbar.username} avatar`} className="h-full w-full object-cover" />
-                  ) : (
-                    adminToolbar.username.charAt(0).toUpperCase()
-                  )}
-                </span>
-                <span className="max-w-[130px] truncate">{adminToolbar.displayName}</span>
-              </button>
-              <div
-                className={`absolute right-0 top-[calc(100%+6px)] z-[190] w-44 rounded-b-md border border-slate-800 bg-black p-1.5 text-white shadow-xl transition duration-150 ${
-                  accountMenuOpen ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"
-                }`}
-              >
-                <Link
-                  href={adminToolbar.profileHref}
-                  className="block rounded px-2 py-1.5 text-xs font-semibold transition hover:bg-white/[0.02]"
-                  onClick={() => setAccountMenuOpen(false)}
-                >
-                  Edit Profile
-                </Link>
-                <form action={logoutAdminAction}>
-                  <button
-                    type="submit"
-                    className="block w-full rounded px-2 py-1.5 text-left text-xs font-semibold transition hover:bg-white/[0.02]"
-                  >
-                    Log out
-                  </button>
-                </form>
-              </div>
-            </div>
-          </div>
-        </div>
+        <AdminBlackToolbar
+          username={adminToolbar.username}
+          displayName={adminToolbar.displayName}
+          avatarUrl={adminToolbar.avatarUrl}
+          profileHref={adminToolbar.profileHref}
+          quickEditHref={quickEditHref}
+        />
       ) : null}
 
       <div className="mx-auto w-[90%] max-w-[var(--site-layout-max-width)] pt-2">
@@ -315,6 +328,8 @@ export function SiteHeader({ siteSettings, adminToolbar = null }: SiteHeaderProp
               <button
                 type="button"
                 aria-label="Search"
+                aria-expanded={searchOpen}
+                onClick={() => setSearchOpen((open) => !open)}
                 className="rounded-lg border border-slate-200 bg-white p-2 text-slate-700 transition hover:bg-slate-100"
               >
                 <svg
@@ -325,10 +340,75 @@ export function SiteHeader({ siteSettings, adminToolbar = null }: SiteHeaderProp
                   strokeWidth="2"
                   className="h-4 w-4"
                 >
-                  <circle cx="11" cy="11" r="7" />
-                  <path d="M20 20l-3.5-3.5" />
+                  {searchOpen ? (
+                    <path d="M6 6l12 12M18 6L6 18" />
+                  ) : (
+                    <>
+                      <circle cx="11" cy="11" r="7" />
+                      <path d="M20 20l-3.5-3.5" />
+                    </>
+                  )}
                 </svg>
               </button>
+              {accountUser ? (
+                <div
+                  ref={siteAccountRootRef}
+                  className="relative"
+                  onMouseEnter={handleSiteAccountOpenDesktop}
+                  onMouseLeave={handleSiteAccountCloseDesktop}
+                >
+                  <button
+                    type="button"
+                    aria-label="Account menu"
+                    aria-haspopup="menu"
+                    aria-expanded={siteAccountMenuOpen}
+                    onClick={handleSiteAccountToggleClick}
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-100"
+                  >
+                    <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-[11px] font-semibold text-slate-700">
+                      {accountUser.avatarUrl ? (
+                        <img src={accountUser.avatarUrl} alt={`${accountUser.username} avatar`} className="h-full w-full rounded-full object-cover" />
+                      ) : (
+                        accountInitial
+                      )}
+                    </span>
+                  </button>
+
+                  <div
+                    className={`absolute right-0 top-[calc(100%+8px)] z-[190] w-40 rounded-xl border border-slate-200 bg-white p-1.5 text-slate-800 shadow-xl transition ${
+                      siteAccountMenuOpen ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"
+                    }`}
+                  >
+                    <Link
+                      href="/my-account"
+                      onClick={() => setSiteAccountMenuOpen(false)}
+                      className="block rounded-md px-2.5 py-2 text-xs font-semibold transition hover:bg-slate-100"
+                    >
+                      My Account
+                    </Link>
+                    <form action={logoutAdminAction}>
+                      <button
+                        type="submit"
+                        onClick={() => setSiteAccountMenuOpen(false)}
+                        className="block w-full rounded-md px-2.5 py-2 text-left text-xs font-semibold transition hover:bg-slate-100"
+                      >
+                        Log out
+                      </button>
+                    </form>
+                  </div>
+                </div>
+              ) : (
+                <Link
+                  href="/login?next=/my-account"
+                  aria-label="My Account"
+                  title="My Account"
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-100"
+                >
+                  <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-[11px] font-semibold text-slate-700">
+                    {accountInitial}
+                  </span>
+                </Link>
+              )}
               <Link
                 href="/cart"
                 aria-label="Cart"
@@ -377,6 +457,77 @@ export function SiteHeader({ siteSettings, adminToolbar = null }: SiteHeaderProp
             </div>
           </div>
 
+          <div
+            className={`grid transition-all duration-300 ${
+              searchOpen ? "grid-rows-[1fr] border-t border-slate-200" : "grid-rows-[0fr]"
+            }`}
+          >
+            <div className="overflow-hidden">
+              <form onSubmit={handleSearchSubmit} className="flex items-center gap-2 p-3 md:px-6">
+                <input
+                  ref={searchInputRef}
+                  value={searchValue}
+                  onChange={(event) => setSearchValue(event.target.value)}
+                  type="search"
+                  autoComplete="off"
+                  placeholder="Search products..."
+                  className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-800 outline-none transition focus:border-slate-500"
+                />
+                <button
+                  type="submit"
+                  className="h-9 rounded-lg site-primary-bg px-3 text-xs font-semibold text-white transition site-primary-bg-hover"
+                >
+                  Search
+                </button>
+              </form>
+
+              {searchValue.trim() ? (
+                <div className="border-t border-slate-200 px-3 pb-3 md:px-6">
+                  {searchLoading ? (
+                    <p className="pt-2 text-xs font-medium text-slate-500">Searching...</p>
+                  ) : searchError ? (
+                    <p className="pt-2 text-xs font-medium text-rose-700">{searchError}</p>
+                  ) : searchResults.length > 0 ? (
+                    <div className="pt-2">
+                      <ul className="space-y-1">
+                        {searchResults.map((item) => (
+                          <li key={item.id}>
+                            <Link
+                              href={`/product/${item.slug}`}
+                              onClick={() => setSearchOpen(false)}
+                              className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white p-2 transition hover:bg-slate-50"
+                            >
+                              <span
+                                className="h-10 w-12 shrink-0 rounded-md bg-slate-100 bg-cover bg-center"
+                                style={{ backgroundImage: `url('${item.image}')` }}
+                                aria-hidden
+                              />
+                              <span className="min-w-0">
+                                <span className="block truncate text-xs font-semibold text-slate-900">{item.name}</span>
+                                <span className="block truncate text-[11px] text-slate-500">
+                                  {item.category} - ${item.price}
+                                </span>
+                              </span>
+                            </Link>
+                          </li>
+                        ))}
+                      </ul>
+                      <Link
+                        href={`/shop?search=${encodeURIComponent(searchValue.trim())}`}
+                        onClick={() => setSearchOpen(false)}
+                        className="mt-2 inline-flex rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
+                      >
+                        See all results
+                      </Link>
+                    </div>
+                  ) : (
+                    <p className="pt-2 text-xs font-medium text-slate-500">No matching products.</p>
+                  )}
+                </div>
+              ) : null}
+            </div>
+          </div>
+
           <nav
             className={`grid transition-all duration-300 md:hidden ${
               mobileMenuOpen ? "grid-rows-[1fr] border-t border-slate-200" : "grid-rows-[0fr]"
@@ -409,4 +560,5 @@ export function SiteHeader({ siteSettings, adminToolbar = null }: SiteHeaderProp
     </div>
   );
 }
+
 

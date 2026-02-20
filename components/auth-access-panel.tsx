@@ -184,6 +184,7 @@ export function AuthAccessPanel({ initialTab = "login", nextPath = "/my-account"
   };
 
   const panelTitle = activeTab === "register" ? "Register" : showResetForm ? "Request Password" : "Login";
+  const activeTabClass = "bg-slate-900 text-white shadow-sm hover:bg-slate-700";
 
   const handleRequestResetToken = async () => {
     setError("");
@@ -238,7 +239,7 @@ export function AuthAccessPanel({ initialTab = "login", nextPath = "/my-account"
           type="button"
           onClick={() => switchTab("login")}
           className={`cursor-pointer rounded-lg px-3 py-2 text-sm font-semibold transition ${
-            activeTab === "login" && !showResetForm ? "bg-slate-900 text-white" : "text-slate-700 hover:bg-slate-100"
+            activeTab === "login" ? activeTabClass : "text-slate-700 hover:bg-slate-100"
           }`}
         >
           Login
@@ -247,7 +248,7 @@ export function AuthAccessPanel({ initialTab = "login", nextPath = "/my-account"
           type="button"
           onClick={() => switchTab("register")}
           className={`cursor-pointer rounded-lg px-3 py-2 text-sm font-semibold transition ${
-            activeTab === "register" ? "bg-slate-900 text-white" : "text-slate-700 hover:bg-slate-100"
+            activeTab === "register" ? activeTabClass : "text-slate-700 hover:bg-slate-100"
           }`}
         >
           Register

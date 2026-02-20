@@ -13,6 +13,7 @@ type AddToCartButtonProps = {
 
 export function AddToCartButton({ productId, name, price, image, className }: AddToCartButtonProps) {
   const [isAdded, setIsAdded] = useState(false);
+  const [isPending, setIsPending] = useState(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -21,23 +22,32 @@ export function AddToCartButton({ productId, name, price, image, className }: Ad
     };
   }, []);
 
-  const handleClick = () => {
-    addItemToCart({
-      id: productId,
-      name,
-      price,
-      image,
-      quantity: 1,
-    });
+  if (price <= 0) return null;
 
-    setIsAdded(true);
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    timeoutRef.current = setTimeout(() => setIsAdded(false), 1200);
+  const handleClick = async () => {
+    if (isPending) return;
+    setIsPending(true);
+
+    try {
+      await addItemToCart({
+        id: productId,
+        name,
+        price,
+        image,
+        quantity: 1,
+      });
+
+      setIsAdded(true);
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      timeoutRef.current = setTimeout(() => setIsAdded(false), 1200);
+    } finally {
+      setIsPending(false);
+    }
   };
 
   return (
-    <button type="button" onClick={handleClick} className={className}>
-      {isAdded ? "Added" : "Add to cart"}
+    <button type="button" onClick={() => void handleClick()} className={className} disabled={isPending}>
+      {isAdded ? "Added" : isPending ? "Adding..." : "Add to cart"}
     </button>
   );
 }

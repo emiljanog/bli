@@ -1,6 +1,10 @@
 import Link from "next/link";
-import { getReviewSummary, listProducts } from "@/lib/shop-store";
+import { getEffectiveProductPricing, getReviewSummary, listProducts } from "@/lib/shop-store";
 import { AddToCartButton } from "@/components/add-to-cart-button";
+
+type ShopPageProps = {
+  searchParams?: Promise<{ search?: string }>;
+};
 
 function formatCurrency(amount: number): string {
   return new Intl.NumberFormat("en-US", {
@@ -10,8 +14,21 @@ function formatCurrency(amount: number): string {
   }).format(amount);
 }
 
-export default async function ShopPage() {
+export default async function ShopPage({ searchParams }: ShopPageProps) {
   const products = listProducts();
+  const params = (await searchParams) ?? {};
+  const search = (params.search ?? "").trim();
+  const searchLower = search.toLowerCase();
+  const filteredProducts = search
+    ? products.filter((product) => {
+        return (
+          product.name.toLowerCase().includes(searchLower) ||
+          product.slug.toLowerCase().includes(searchLower) ||
+          product.category.toLowerCase().includes(searchLower) ||
+          product.tags.some((tag) => tag.toLowerCase().includes(searchLower))
+        );
+      })
+    : products;
 
   return (
     <main className="text-slate-900">
@@ -29,12 +46,27 @@ export default async function ShopPage() {
           >
             Shiko Collections
           </Link>
+
+          {search ? (
+            <div className="mt-4 flex flex-wrap items-center gap-2 text-sm">
+              <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 font-medium text-slate-700">
+                Results for: <span className="font-semibold text-slate-900">{search}</span>
+              </p>
+              <Link
+                href="/shop"
+                className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
+              >
+                Clear search
+              </Link>
+            </div>
+          ) : null}
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {products.map((product) => (
+          {filteredProducts.map((product) => (
             (() => {
               const reviewSummary = getReviewSummary(product.id);
+              const pricing = getEffectiveProductPricing(product);
               return (
                 <article
                   key={product.id}
@@ -60,7 +92,10 @@ export default async function ShopPage() {
                       ? `${reviewSummary.average}/5 (${reviewSummary.count} reviews)`
                       : "No reviews yet"}
                   </p>
-                  <p className="mt-2 text-base font-bold text-slate-900">{formatCurrency(product.price)}</p>
+                  <p className="mt-2 text-base font-bold text-slate-900">{formatCurrency(pricing.current)}</p>
+                  {pricing.onSale ? (
+                    <p className="text-sm text-slate-500 line-through">{formatCurrency(pricing.regular)}</p>
+                  ) : null}
                   <Link
                     href={`/product/${product.slug}`}
                     className="mt-3 inline-block text-sm font-semibold text-slate-700 underline-offset-4 transition hover:text-slate-900 hover:underline"
@@ -70,7 +105,7 @@ export default async function ShopPage() {
                   <AddToCartButton
                     productId={product.id}
                     name={product.name}
-                    price={product.price}
+                    price={pricing.current}
                     image={product.image}
                     className="mt-4 rounded-xl site-primary-bg px-4 py-2 text-sm font-semibold text-white transition site-primary-bg-hover"
                   />
@@ -79,6 +114,12 @@ export default async function ShopPage() {
             })()
           ))}
         </div>
+
+        {filteredProducts.length === 0 ? (
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-600">
+            No products found for <span className="font-semibold text-slate-900">&quot;{search}&quot;</span>.
+          </div>
+        ) : null}
       </section>
     </main>
   );

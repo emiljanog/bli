@@ -9,6 +9,7 @@ type AdminUserMenuProps = {
   role: string;
   avatarUrl?: string;
   compact?: boolean;
+  compactLarge?: boolean;
   logoutFormId?: string;
   profileHref?: string;
 };
@@ -36,6 +37,7 @@ export function AdminUserMenu({
   role,
   avatarUrl = "",
   compact = false,
+  compactLarge = false,
   logoutFormId = "admin-logout-form",
   profileHref = "/my-account",
 }: AdminUserMenuProps) {
@@ -45,6 +47,8 @@ export function AdminUserMenu({
   const safeName = username.trim() || "Admin";
   const hasAvatar = avatarUrl.trim().length > 0;
   const initial = safeName.charAt(0).toUpperCase();
+  const compactButtonClass = compactLarge ? "h-[50px]" : "h-10";
+  const compactAvatarClass = compactLarge ? "h-10 w-10" : "h-8 w-8";
 
   function clearCloseTimer() {
     if (closeTimerRef.current) {
@@ -91,11 +95,11 @@ export function AdminUserMenu({
         onClick={toggleMenu}
         className={`inline-flex items-center gap-2 text-sm font-semibold text-slate-700 transition ${
           compact
-            ? "h-10 rounded-full px-1 hover:bg-[var(--admin-hover-bg)]"
+            ? `${compactButtonClass} rounded-full px-1 hover:bg-[var(--admin-hover-bg)]`
             : "h-10 rounded-xl border border-[var(--admin-border)] bg-[var(--admin-panel-bg)] px-3 hover:bg-[var(--admin-hover-bg)]"
         }`}
       >
-        <span className="inline-flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-[var(--admin-hover-bg)] text-[var(--admin-text)]">
+        <span className={`inline-flex ${compactAvatarClass} items-center justify-center overflow-hidden rounded-full bg-[var(--admin-hover-bg)] text-[var(--admin-text)]`}>
           {hasAvatar ? (
             <img src={avatarUrl} alt={`${safeName} avatar`} className="h-full w-full object-cover" />
           ) : (

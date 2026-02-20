@@ -85,6 +85,14 @@ export default async function RootLayout({
   const adminRole = getAdminRoleFromCookieStore(cookieStore);
   const adminUsername = getAdminUsernameFromCookieStore(cookieStore);
   const adminUser = findUserByUsername(adminUsername);
+  const accountUser =
+    isLoggedIn
+      ? {
+          username: adminUsername || "user",
+          displayName: adminUser?.name || adminUsername || "User",
+          avatarUrl: adminUser?.avatarUrl || "",
+        }
+      : null;
   const adminToolbar =
     isLoggedIn && canAccessAdmin(adminRole)
       ? {
@@ -113,7 +121,7 @@ export default async function RootLayout({
         suppressHydrationWarning
         className={`${geistSans.variable} ${geistMono.variable} bg-slate-50 text-slate-900 antialiased`}
       >
-        <AppShell siteSettings={siteSettings} adminToolbar={adminToolbar}>
+        <AppShell siteSettings={siteSettings} adminToolbar={adminToolbar} accountUser={accountUser}>
           {children}
         </AppShell>
       </body>

@@ -20,10 +20,15 @@ if (allowedOrigins.length === 0) {
   allowedOrigins.push("bli.al", "www.bli.al");
 }
 
+const serverActionBodySizeLimit = (process.env.NEXT_SERVER_ACTIONS_BODY_SIZE_LIMIT ?? "64mb") as NonNullable<
+  NonNullable<NonNullable<NextConfig["experimental"]>["serverActions"]>["bodySizeLimit"]
+>;
+
 const nextConfig: NextConfig = {
   experimental: {
     serverActions: {
       allowedOrigins,
+      bodySizeLimit: serverActionBodySizeLimit,
     },
   },
 };

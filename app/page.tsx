@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { AddToCartButton } from "@/components/add-to-cart-button";
 import { HomeHero } from "@/components/home-hero";
-import { getReviewSummary, getSiteSettings, listProducts } from "@/lib/shop-store";
+import { getEffectiveProductPricing, getReviewSummary, getSiteSettings, listProducts } from "@/lib/shop-store";
 
 function formatCurrency(amount: number): string {
   return new Intl.NumberFormat("en-US", {
@@ -61,6 +61,7 @@ export default function Home() {
             {featuredProducts.map((product) => (
               (() => {
                 const reviewSummary = getReviewSummary(product.id);
+                const pricing = getEffectiveProductPricing(product);
                 return (
                   <article
                     key={product.id}
@@ -85,7 +86,10 @@ export default function Home() {
                         : "No reviews yet"}
                     </p>
                     <div className="mt-2 flex items-center gap-2">
-                      <span className="text-lg font-bold text-slate-900">{formatCurrency(product.price)}</span>
+                      <span className="text-lg font-bold text-slate-900">{formatCurrency(pricing.current)}</span>
+                      {pricing.onSale ? (
+                        <span className="text-sm text-slate-500 line-through">{formatCurrency(pricing.regular)}</span>
+                      ) : null}
                     </div>
                     <Link
                       href={`/product/${product.slug}`}
@@ -96,7 +100,7 @@ export default function Home() {
                     <AddToCartButton
                       productId={product.id}
                       name={product.name}
-                      price={product.price}
+                      price={pricing.current}
                       image={product.image}
                       className="mt-4 w-full rounded-xl site-primary-bg px-4 py-2 text-sm font-semibold text-white transition site-primary-bg-hover"
                     />

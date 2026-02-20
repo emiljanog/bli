@@ -167,15 +167,6 @@ export function AdminMediaManager({ media }: AdminMediaManagerProps) {
       >
         <div className="flex flex-wrap items-center gap-3">
           <p className="text-xs font-semibold text-slate-600">{showingText}</p>
-          <label className="inline-flex items-center gap-2 text-xs font-semibold text-slate-700">
-            <input
-              type="checkbox"
-              checked={allChecked}
-              onChange={(event) => toggleAll(event.target.checked)}
-              className="h-4 w-4 rounded border-slate-300"
-            />
-            Select all on page
-          </label>
           <span className="text-xs font-semibold text-slate-500">Selected: {selectedIds.length}</span>
         </div>
 
@@ -368,7 +359,7 @@ export function AdminMediaManager({ media }: AdminMediaManagerProps) {
               <article
                 key={item.id}
                 className={`rounded-2xl border bg-white p-3 shadow-sm ${
-                  isSelected ? "border-slate-500" : "border-slate-200"
+                  isSelected ? "site-primary-border bg-[#2ea2cc]/5" : "border-slate-200"
                 }`}
               >
                 <div className="mb-2 flex items-center justify-between gap-2">
@@ -392,8 +383,10 @@ export function AdminMediaManager({ media }: AdminMediaManagerProps) {
                     }
                   }}
                   className={`h-36 rounded-xl border bg-slate-100 bg-cover bg-center transition ${
-                    isSelected ? "border-slate-500" : "border-slate-200"
-                  } cursor-pointer hover:border-slate-400`}
+                    isSelected
+                      ? "site-primary-border ring-2 ring-[#2ea2cc]/45 outline outline-2 outline-[#2ea2cc]"
+                      : "border-slate-200 hover:border-slate-400"
+                  } cursor-pointer`}
                   style={{ backgroundImage: `url('${item.url}')` }}
                   aria-label={item.alt || item.id}
                 />
@@ -491,7 +484,7 @@ export function AdminMediaManager({ media }: AdminMediaManagerProps) {
                 return (
                   <tr
                     key={item.id}
-                    className={`border-b border-slate-100 align-top ${isSelected ? "bg-slate-50" : ""}`}
+                    className={`border-b border-slate-100 align-top ${isSelected ? "bg-[#2ea2cc]/10" : ""}`}
                   >
                     <td className="py-3 pr-3">
                       <input
@@ -514,8 +507,10 @@ export function AdminMediaManager({ media }: AdminMediaManagerProps) {
                           }
                         }}
                         className={`h-10 w-14 rounded-md border bg-slate-100 bg-cover bg-center transition ${
-                          isSelected ? "border-slate-500" : "border-slate-200"
-                        } cursor-pointer hover:border-slate-400`}
+                          isSelected
+                            ? "site-primary-border ring-2 ring-[#2ea2cc]/45 outline outline-2 outline-[#2ea2cc]"
+                            : "border-slate-200 hover:border-slate-400"
+                        } cursor-pointer`}
                         style={{ backgroundImage: `url('${item.url}')` }}
                         aria-label={item.alt || item.id}
                       />

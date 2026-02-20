@@ -6,18 +6,48 @@ export type Product = {
   slug: string;
   name: string;
   category: string;
+  categories: string[];
+  visibility: ProductVisibility;
+  visibilityPassword: string;
   description: string;
   image: string;
   gallery: string[];
   tags: string[];
   price: number;
+  salePrice: number | null;
+  saleScheduleStartAt: string | null;
+  saleScheduleEndAt: string | null;
   stock: number;
   publishStatus: PublicationStatus;
   trashedAt: string | null;
 };
 
+export type ProductPricing = {
+  current: number;
+  regular: number;
+  salePrice: number | null;
+  onSale: boolean;
+  discountPercent: number;
+};
+
+export type ProductCategory = {
+  id: string;
+  name: string;
+  slug: string;
+  description: string;
+  imageUrl: string;
+};
+
+export type ProductTag = {
+  id: string;
+  name: string;
+  slug: string;
+  description: string;
+};
+
 export type OrderStatus = "Pending" | "Paid" | "Shipped" | "Cancelled";
 export type PublicationStatus = "Published" | "Draft";
+export type ProductVisibility = "Public" | "LoggedUsers" | "Password";
 
 export type Order = {
   id: string;
@@ -190,6 +220,7 @@ export type SiteSettings = {
   siteTitle: string;
   brandName: string;
   layoutMaxWidthPx: number;
+  mediaUploadMaxMb: number;
   logoUrl: string;
   iconUrl: string;
   brandingVersion: number;
@@ -222,12 +253,31 @@ export type SiteSettings = {
   notifyAdminPaidOrder: boolean;
   notifyShippedOrder: boolean;
   notifyLowStock: boolean;
+  paymentCadEnabled: boolean;
+  paymentBankTransferEnabled: boolean;
+  paymentStripeDemoEnabled: boolean;
+  paymentBankTransferInstructions: string;
+  shippingStandardEnabled: boolean;
+  shippingStandardLabel: string;
+  shippingStandardEta: string;
+  shippingStandardPrice: number;
+  shippingExpressEnabled: boolean;
+  shippingExpressLabel: string;
+  shippingExpressEta: string;
+  shippingExpressPrice: number;
+  shippingFreeThreshold: number;
 };
 
 type ProductInput = {
   name: string;
   category: string;
+  categories?: string[];
+  visibility?: ProductVisibility;
+  visibilityPassword?: string;
   price: number;
+  salePrice?: number | null;
+  saleScheduleStartAt?: string | null;
+  saleScheduleEndAt?: string | null;
   stock: number;
   slug?: string;
   description?: string;
@@ -338,6 +388,8 @@ type CouponApplyResult = {
 type Store = {
   seq: number;
   products: Product[];
+  productCategories: ProductCategory[];
+  productTags: ProductTag[];
   orders: Order[];
   sales: Sale[];
   accounts: AdminAccount[];
@@ -430,6 +482,8 @@ function mergePersistedStore(base: Store, input: unknown): Store {
     ...draft,
     seq: typeof draft.seq === "number" ? draft.seq : base.seq,
     products: Array.isArray(draft.products) ? draft.products : base.products,
+    productCategories: Array.isArray(draft.productCategories) ? draft.productCategories : base.productCategories,
+    productTags: Array.isArray(draft.productTags) ? draft.productTags : base.productTags,
     orders: Array.isArray(draft.orders) ? draft.orders : base.orders,
     sales: Array.isArray(draft.sales) ? draft.sales : base.sales,
     accounts: Array.isArray(draft.accounts) ? draft.accounts : base.accounts,
@@ -578,6 +632,17 @@ function normalizePublicationStatus(value: unknown): PublicationStatus {
   return normalized === "draft" ? "Draft" : "Published";
 }
 
+function normalizeProductVisibility(value: unknown): ProductVisibility {
+  const normalized = asSafeString(value).toLowerCase();
+  if (normalized === "loggedusers" || normalized === "logged_users" || normalized === "logged-users") {
+    return "LoggedUsers";
+  }
+  if (normalized === "password") {
+    return "Password";
+  }
+  return "Public";
+}
+
 function normalizeMediaAssignedTo(value: unknown): MediaAssignedTo {
   const normalized = asSafeString(value).toLowerCase();
   if (normalized === "product") return "Product";
@@ -622,6 +687,58 @@ function clampInt(value: number, min: number, max: number): number {
 function money(value: number): number {
   if (!Number.isFinite(value)) return 0;
   return Math.max(0, Number(value.toFixed(2)));
+}
+
+function normalizeSalePrice(price: number, salePrice: unknown): number | null {
+  const regularPrice = money(price);
+  const parsed = Number(salePrice);
+  if (!Number.isFinite(parsed)) return null;
+  const safeSale = money(parsed);
+  if (safeSale <= 0 || safeSale >= regularPrice) return null;
+  return safeSale;
+}
+
+function normalizeSaleScheduleDate(value: unknown): string | null {
+  const safe = asSafeString(value);
+  if (!safe) return null;
+  const timestamp = Date.parse(safe);
+  if (!Number.isFinite(timestamp)) return null;
+  return new Date(timestamp).toISOString();
+}
+
+function isSaleScheduleActive(
+  saleScheduleStartAt: string | null | undefined,
+  saleScheduleEndAt: string | null | undefined,
+  nowMs = Date.now(),
+): boolean {
+  const startAt = normalizeSaleScheduleDate(saleScheduleStartAt);
+  const endAt = normalizeSaleScheduleDate(saleScheduleEndAt);
+  const startMs = startAt ? Date.parse(startAt) : Number.NEGATIVE_INFINITY;
+  const endMs = endAt ? Date.parse(endAt) : Number.POSITIVE_INFINITY;
+  if (Number.isFinite(startMs) && Number.isFinite(endMs) && endMs <= startMs) return false;
+  return nowMs >= startMs && nowMs <= endMs;
+}
+
+export function getEffectiveProductPricing(
+  product: Pick<Product, "price" | "salePrice" | "saleScheduleStartAt" | "saleScheduleEndAt">,
+  nowMs = Date.now(),
+): ProductPricing {
+  const regular = money(product.price);
+  const normalizedSalePrice = normalizeSalePrice(product.price, product.salePrice);
+  const hasActiveSale =
+    normalizedSalePrice !== null &&
+    isSaleScheduleActive(product.saleScheduleStartAt, product.saleScheduleEndAt, nowMs);
+  const salePrice = hasActiveSale ? normalizedSalePrice : null;
+  const current = salePrice ?? regular;
+  const discountPercent =
+    salePrice !== null && regular > 0 ? Math.round(((regular - salePrice) / regular) * 100) : 0;
+  return {
+    current,
+    regular,
+    salePrice,
+    onSale: salePrice !== null,
+    discountPercent,
+  };
 }
 
 function extractIdNumber(value: string): number {
@@ -704,11 +821,51 @@ function nextUniqueSlug(baseSlug: string, taken: Set<string>): string {
 }
 
 function cloneProduct(product: Product): Product {
+  const safeCategories = Array.isArray(product.categories)
+    ? product.categories
+    : asSafeString(product.category)
+      ? [asSafeString(product.category)]
+      : ["Uncategorized"];
+  const safeGallery = Array.isArray(product.gallery) ? product.gallery : [];
+  const safeTags = Array.isArray(product.tags) ? product.tags : [];
+  const safeVisibility = normalizeProductVisibility(
+    (product as Partial<Product>).visibility ?? "Public",
+  );
+  const safeVisibilityPassword = safeVisibility === "Password"
+    ? asSafeString((product as Partial<Product>).visibilityPassword)
+    : "";
+
+  const safeSaleScheduleStartAt = normalizeSaleScheduleDate((product as Partial<Product>).saleScheduleStartAt ?? null);
+  let safeSaleScheduleEndAt = normalizeSaleScheduleDate((product as Partial<Product>).saleScheduleEndAt ?? null);
+  if (
+    safeSaleScheduleStartAt &&
+    safeSaleScheduleEndAt &&
+    Date.parse(safeSaleScheduleEndAt) <= Date.parse(safeSaleScheduleStartAt)
+  ) {
+    safeSaleScheduleEndAt = null;
+  }
+  const safeSalePrice = normalizeSalePrice(product.price, (product as Partial<Product>).salePrice ?? null);
+
   return {
     ...product,
-    gallery: [...product.gallery],
-    tags: [...product.tags],
+    category: safeCategories[0] ?? "Uncategorized",
+    categories: [...safeCategories],
+    visibility: safeVisibility,
+    visibilityPassword: safeVisibilityPassword,
+    gallery: [...safeGallery],
+    tags: [...safeTags],
+    salePrice: safeSalePrice,
+    saleScheduleStartAt: safeSalePrice !== null ? safeSaleScheduleStartAt : null,
+    saleScheduleEndAt: safeSalePrice !== null ? safeSaleScheduleEndAt : null,
   };
+}
+
+function cloneProductCategory(category: ProductCategory): ProductCategory {
+  return { ...category };
+}
+
+function cloneProductTag(tag: ProductTag): ProductTag {
+  return { ...tag };
 }
 
 function cloneCoupon(coupon: Coupon): Coupon {
@@ -895,6 +1052,7 @@ function defaultSiteSettings(): SiteSettings {
     siteTitle: "BLI Shop",
     brandName: "BLI",
     layoutMaxWidthPx: 1440,
+    mediaUploadMaxMb: 10,
     logoUrl: "/logo.svg",
     iconUrl: "/favicon.ico",
     brandingVersion: 1,
@@ -927,6 +1085,20 @@ function defaultSiteSettings(): SiteSettings {
     notifyAdminPaidOrder: true,
     notifyShippedOrder: true,
     notifyLowStock: true,
+    paymentCadEnabled: true,
+    paymentBankTransferEnabled: true,
+    paymentStripeDemoEnabled: true,
+    paymentBankTransferInstructions:
+      "Use order ID as payment reference. Bank: Demo Bank, IBAN: AL47 2121 1009 0000 0002 3569 8741.",
+    shippingStandardEnabled: true,
+    shippingStandardLabel: "Standard shipping",
+    shippingStandardEta: "2-4 business days",
+    shippingStandardPrice: 6,
+    shippingExpressEnabled: true,
+    shippingExpressLabel: "Express shipping",
+    shippingExpressEta: "1-2 business days",
+    shippingExpressPrice: 12,
+    shippingFreeThreshold: 120,
   };
 }
 
@@ -972,10 +1144,38 @@ function normalizeProductsInPlace(products: Product[]): void {
 
   for (const product of products) {
     product.name = asSafeString(product.name);
-    product.category = asSafeString(product.category);
+    const normalizedCategories = normalizeStringArray(product.categories);
+    const fallbackCategory = asSafeString(product.category);
+    if (normalizedCategories.length === 0 && fallbackCategory) {
+      normalizedCategories.push(fallbackCategory);
+    }
+    if (normalizedCategories.length === 0) {
+      normalizedCategories.push("Uncategorized");
+    }
+    product.categories = normalizedCategories;
+    product.category = normalizedCategories[0];
+    product.visibility = normalizeProductVisibility(product.visibility);
+    product.visibilityPassword =
+      product.visibility === "Password" ? asSafeString(product.visibilityPassword) : "";
     product.description = asSafeString(product.description);
     product.tags = normalizeStringArray(product.tags);
     product.gallery = normalizeStringArray(product.gallery);
+    product.price = money(product.price);
+    product.salePrice = normalizeSalePrice(product.price, (product as Partial<Product>).salePrice ?? null);
+    product.saleScheduleStartAt = normalizeSaleScheduleDate((product as Partial<Product>).saleScheduleStartAt ?? null);
+    product.saleScheduleEndAt = normalizeSaleScheduleDate((product as Partial<Product>).saleScheduleEndAt ?? null);
+    if (
+      product.saleScheduleStartAt &&
+      product.saleScheduleEndAt &&
+      Date.parse(product.saleScheduleEndAt) <= Date.parse(product.saleScheduleStartAt)
+    ) {
+      product.saleScheduleEndAt = null;
+    }
+    if (product.salePrice === null) {
+      product.saleScheduleStartAt = null;
+      product.saleScheduleEndAt = null;
+    }
+    product.stock = Math.max(0, Math.floor(Number(product.stock) || 0));
     product.image = asSafeString(product.image) || defaultImageById(product.id);
     if (product.trashedAt === undefined) {
       product.trashedAt = null;
@@ -989,6 +1189,111 @@ function normalizeProductsInPlace(products: Product[]): void {
     const baseSlug = slugify(asSafeString(product.slug) || product.name || product.id);
     product.slug = nextUniqueSlug(baseSlug, takenSlugs);
   }
+}
+
+function normalizeProductCategoriesInPlace(categories: ProductCategory[]): void {
+  const takenSlugs = new Set<string>();
+  for (const category of categories) {
+    category.name = asSafeString(category.name);
+    category.description = asSafeString(category.description);
+    category.imageUrl = asSafeString(category.imageUrl);
+
+    const baseSlug = slugify(asSafeString(category.slug) || category.name);
+    category.slug = nextUniqueSlug(baseSlug, takenSlugs);
+    category.id = asSafeString(category.id) || `CAT-${category.slug}`;
+  }
+}
+
+function normalizeProductTagsInPlace(tags: ProductTag[]): void {
+  const takenSlugs = new Set<string>();
+  for (const tag of tags) {
+    tag.name = asSafeString(tag.name);
+    tag.description = asSafeString(tag.description);
+    const baseSlug = slugify(asSafeString(tag.slug) || tag.name);
+    tag.slug = nextUniqueSlug(baseSlug, takenSlugs);
+    tag.id = asSafeString(tag.id) || `TAG-${tag.slug}`;
+  }
+}
+
+function ensureTaxonomiesInPlace(s: Store): void {
+  const categoryBySlug = new Map<string, ProductCategory>();
+  for (const category of s.productCategories) {
+    categoryBySlug.set(category.slug, category);
+  }
+
+  const tagBySlug = new Map<string, ProductTag>();
+  for (const tag of s.productTags) {
+    tagBySlug.set(tag.slug, tag);
+  }
+
+  for (const product of s.products) {
+    const normalizedCategoryNames: string[] = [];
+    for (const rawCategoryName of product.categories) {
+      const categoryName = asSafeString(rawCategoryName);
+      if (!categoryName) continue;
+      const categorySlug = slugify(categoryName);
+      const existingCategory = categoryBySlug.get(categorySlug);
+      if (existingCategory) {
+        normalizedCategoryNames.push(existingCategory.name);
+      } else {
+        const created: ProductCategory = {
+          id: `CAT-${categorySlug}`,
+          name: categoryName,
+          slug: categorySlug,
+          description: "",
+          imageUrl: "",
+        };
+        s.productCategories.push(created);
+        categoryBySlug.set(categorySlug, created);
+        normalizedCategoryNames.push(created.name);
+      }
+    }
+
+    if (normalizedCategoryNames.length === 0) {
+      const uncategorizedSlug = "uncategorized";
+      let uncategorized = categoryBySlug.get(uncategorizedSlug);
+      if (!uncategorized) {
+        uncategorized = {
+          id: "CAT-uncategorized",
+          name: "Uncategorized",
+          slug: uncategorizedSlug,
+          description: "",
+          imageUrl: "",
+        };
+        s.productCategories.push(uncategorized);
+        categoryBySlug.set(uncategorizedSlug, uncategorized);
+      }
+      normalizedCategoryNames.push(uncategorized.name);
+    }
+
+    product.categories = Array.from(new Set(normalizedCategoryNames));
+    product.category = product.categories[0];
+
+    const normalizedTagNames: string[] = [];
+    for (const rawTagName of product.tags) {
+      const tagName = asSafeString(rawTagName);
+      if (!tagName) continue;
+      const tagSlug = slugify(tagName);
+      const existingTag = tagBySlug.get(tagSlug);
+      if (existingTag) {
+        normalizedTagNames.push(existingTag.name);
+      } else {
+        const created: ProductTag = {
+          id: `TAG-${tagSlug}`,
+          name: tagName,
+          slug: tagSlug,
+          description: "",
+        };
+        s.productTags.push(created);
+        tagBySlug.set(tagSlug, created);
+        normalizedTagNames.push(created.name);
+      }
+    }
+    product.tags = Array.from(new Set(normalizedTagNames));
+  }
+
+  normalizeProductCategoriesInPlace(s.productCategories);
+  normalizeProductTagsInPlace(s.productTags);
 }
 
 function normalizeCouponsInPlace(coupons: Coupon[]): void {
@@ -1246,6 +1551,10 @@ function normalizeSiteSettingsInPlace(settings: SiteSettings): void {
   settings.siteTitle = asSafeString(settings.siteTitle) || "BLI Shop";
   settings.brandName = asSafeString(settings.brandName) || "BLI";
   settings.layoutMaxWidthPx = clampInt(settings.layoutMaxWidthPx, 960, 2400) || 1440;
+  const parsedMediaUploadMaxMb = Number(settings.mediaUploadMaxMb);
+  settings.mediaUploadMaxMb = Number.isFinite(parsedMediaUploadMaxMb)
+    ? clampInt(parsedMediaUploadMaxMb, 1, 100)
+    : 10;
   settings.logoUrl = asSafeString(settings.logoUrl);
   settings.iconUrl = asSafeString(settings.iconUrl) || "/favicon.ico";
   settings.brandingVersion = Math.max(1, Math.floor(Number(settings.brandingVersion) || 1));
@@ -1294,16 +1603,37 @@ function normalizeSiteSettingsInPlace(settings: SiteSettings): void {
   settings.notifyAdminPaidOrder = settings.notifyAdminPaidOrder !== false;
   settings.notifyShippedOrder = settings.notifyShippedOrder !== false;
   settings.notifyLowStock = settings.notifyLowStock !== false;
+  settings.paymentCadEnabled = settings.paymentCadEnabled !== false;
+  settings.paymentBankTransferEnabled = settings.paymentBankTransferEnabled !== false;
+  settings.paymentStripeDemoEnabled = settings.paymentStripeDemoEnabled !== false;
+  settings.paymentBankTransferInstructions =
+    asSafeString(settings.paymentBankTransferInstructions) ||
+    "Use order ID as payment reference. Bank: Demo Bank, IBAN: AL47 2121 1009 0000 0002 3569 8741.";
+  settings.shippingStandardEnabled = settings.shippingStandardEnabled !== false;
+  settings.shippingStandardLabel = asSafeString(settings.shippingStandardLabel) || "Standard shipping";
+  settings.shippingStandardEta = asSafeString(settings.shippingStandardEta) || "2-4 business days";
+  settings.shippingStandardPrice = money(Number(settings.shippingStandardPrice) || 0);
+  settings.shippingExpressEnabled = settings.shippingExpressEnabled !== false;
+  settings.shippingExpressLabel = asSafeString(settings.shippingExpressLabel) || "Express shipping";
+  settings.shippingExpressEta = asSafeString(settings.shippingExpressEta) || "1-2 business days";
+  settings.shippingExpressPrice = money(Number(settings.shippingExpressPrice) || 0);
+  settings.shippingFreeThreshold = money(Number(settings.shippingFreeThreshold) || 0);
 }
 
 function buildSeedProduct(seed: ProductSeed): Product {
   return {
     ...seed,
+    categories: [seed.category],
+    visibility: "Public",
+    visibilityPassword: "",
     slug: slugify(seed.name),
     description: "",
     image: defaultImageById(seed.id),
     gallery: defaultGalleryById(seed.id),
     tags: [],
+    salePrice: null,
+    saleScheduleStartAt: null,
+    saleScheduleEndAt: null,
     publishStatus: "Published",
     trashedAt: null,
   };
@@ -1405,9 +1735,22 @@ function generateDemoUsers(count: number, startId = 7101): User[] {
 }
 
 function createInitialStore(): Store {
+  const initialCategoryNames = Array.from(new Set(PRODUCT_SEEDS.map((seed) => seed.category)));
+
   return {
     seq: 1100,
     products: PRODUCT_SEEDS.map(buildSeedProduct),
+    productCategories: initialCategoryNames.map((name) => {
+      const slug = slugify(name);
+      return {
+        id: `CAT-${slug}`,
+        name,
+        slug,
+        description: "",
+        imageUrl: "",
+      };
+    }),
+    productTags: [],
     orders: [
       {
         id: "ORD-2001",
@@ -1624,6 +1967,12 @@ function store(): Store {
       if (!globalThis.__bli_store__.reviews) {
         globalThis.__bli_store__.reviews = [];
       }
+      if (!globalThis.__bli_store__.productCategories) {
+        globalThis.__bli_store__.productCategories = [];
+      }
+      if (!globalThis.__bli_store__.productTags) {
+        globalThis.__bli_store__.productTags = [];
+      }
       if (!globalThis.__bli_store__.users) {
         globalThis.__bli_store__.users = [];
       }
@@ -1650,6 +1999,9 @@ function store(): Store {
       migrateLegacyEntityIdsInPlace(globalThis.__bli_store__);
       normalizeOrdersInPlace(globalThis.__bli_store__.orders);
       normalizeProductsInPlace(globalThis.__bli_store__.products);
+      normalizeProductCategoriesInPlace(globalThis.__bli_store__.productCategories);
+      normalizeProductTagsInPlace(globalThis.__bli_store__.productTags);
+      ensureTaxonomiesInPlace(globalThis.__bli_store__);
       normalizeCouponsInPlace(globalThis.__bli_store__.coupons);
       normalizeReviewsInPlace(globalThis.__bli_store__.reviews);
       normalizeUsersInPlace(globalThis.__bli_store__.users);
@@ -1669,6 +2021,14 @@ function store(): Store {
 
     persistStoreNow();
   }
+
+  if (!Array.isArray(globalThis.__bli_store__.productCategories)) {
+    globalThis.__bli_store__.productCategories = [];
+  }
+  if (!Array.isArray(globalThis.__bli_store__.productTags)) {
+    globalThis.__bli_store__.productTags = [];
+  }
+
   return globalThis.__bli_store__;
 }
 
@@ -1725,6 +2085,20 @@ function canIncludePage(page: Page, options: ListPagesOptions = {}): boolean {
 export function listProducts(options: ListProductsOptions = {}): Product[] {
   const products = store().products;
   return products.filter((product) => canIncludeProduct(product, options)).map(cloneProduct);
+}
+
+export function peekNextProductId(): string {
+  return nextEntityId(store().products);
+}
+
+export function listProductCategories(): ProductCategory[] {
+  const categories = store().productCategories;
+  return Array.isArray(categories) ? categories.map(cloneProductCategory) : [];
+}
+
+export function listProductTags(): ProductTag[] {
+  const tags = store().productTags;
+  return Array.isArray(tags) ? tags.map(cloneProductTag) : [];
 }
 
 export function getProductById(
@@ -1865,6 +2239,14 @@ export function markAllAdminNotificationsAsRead(): number {
     }
   }
   return updated;
+}
+
+export function clearReadAdminNotifications(): number {
+  const notifications = ensureAdminNotificationsStore();
+  const before = notifications.length;
+  const unreadOnly = notifications.filter((notification) => !notification.isRead);
+  notifications.splice(0, notifications.length, ...unreadOnly);
+  return Math.max(0, before - notifications.length);
 }
 
 export function addSupportTicket(input: {
@@ -2515,17 +2897,134 @@ export function setPagePublishStatus(pageId: string, publishStatus: PublicationS
   return clonePage(target);
 }
 
+export function upsertProductCategories(
+  input: Array<{ name: string; slug?: string; description?: string; imageUrl?: string }>,
+): ProductCategory[] {
+  const s = store();
+  for (const draft of input) {
+    const name = asSafeString(draft.name);
+    if (!name) continue;
+    const slug = slugify(asSafeString(draft.slug) || name);
+    const existing = s.productCategories.find((item) => item.slug === slug);
+    if (existing) {
+      existing.name = name;
+      existing.description = asSafeString(draft.description);
+      existing.imageUrl = asSafeString(draft.imageUrl);
+      continue;
+    }
+    s.productCategories.push({
+      id: `CAT-${slug}`,
+      name,
+      slug,
+      description: asSafeString(draft.description),
+      imageUrl: asSafeString(draft.imageUrl),
+    });
+  }
+
+  normalizeProductCategoriesInPlace(s.productCategories);
+  ensureTaxonomiesInPlace(s);
+  return s.productCategories.map(cloneProductCategory);
+}
+
+export function deleteProductCategoryBySlug(slug: string): boolean {
+  const s = store();
+  const normalizedSlug = slugify(slug);
+  const index = s.productCategories.findIndex((item) => item.slug === normalizedSlug);
+  if (index === -1) return false;
+
+  const removed = s.productCategories[index];
+  s.productCategories.splice(index, 1);
+  for (const product of s.products) {
+    product.categories = product.categories.filter((name) => slugify(name) !== normalizedSlug);
+    if (slugify(product.category) === normalizedSlug || product.category === removed.name) {
+      product.category = product.categories[0] ?? "";
+    }
+  }
+
+  normalizeProductsInPlace(s.products);
+  ensureTaxonomiesInPlace(s);
+  return true;
+}
+
+export function upsertProductTags(
+  input: Array<{ name: string; slug?: string; description?: string }>,
+): ProductTag[] {
+  const s = store();
+  for (const draft of input) {
+    const name = asSafeString(draft.name);
+    if (!name) continue;
+    const slug = slugify(asSafeString(draft.slug) || name);
+    const existing = s.productTags.find((item) => item.slug === slug);
+    if (existing) {
+      existing.name = name;
+      existing.description = asSafeString(draft.description);
+      continue;
+    }
+
+    s.productTags.push({
+      id: `TAG-${slug}`,
+      name,
+      slug,
+      description: asSafeString(draft.description),
+    });
+  }
+
+  normalizeProductTagsInPlace(s.productTags);
+  ensureTaxonomiesInPlace(s);
+  return s.productTags.map(cloneProductTag);
+}
+
+export function deleteProductTagBySlug(slug: string): boolean {
+  const s = store();
+  const normalizedSlug = slugify(slug);
+  const index = s.productTags.findIndex((item) => item.slug === normalizedSlug);
+  if (index === -1) return false;
+
+  s.productTags.splice(index, 1);
+  for (const product of s.products) {
+    product.tags = product.tags.filter((name) => slugify(name) !== normalizedSlug);
+  }
+
+  normalizeProductsInPlace(s.products);
+  ensureTaxonomiesInPlace(s);
+  return true;
+}
+
 export function addProduct(input: ProductInput): Product {
+  const normalizedCategories = normalizeStringArray(input.categories);
+  const fallbackCategory = asSafeString(input.category);
+  if (normalizedCategories.length === 0 && fallbackCategory) {
+    normalizedCategories.push(fallbackCategory);
+  }
+  if (normalizedCategories.length === 0) {
+    normalizedCategories.push("Uncategorized");
+  }
+
+  const normalizedSalePrice = normalizeSalePrice(input.price, input.salePrice ?? null);
+  const saleScheduleStartAt =
+    normalizedSalePrice !== null ? normalizeSaleScheduleDate(input.saleScheduleStartAt ?? null) : null;
+  let saleScheduleEndAt =
+    normalizedSalePrice !== null ? normalizeSaleScheduleDate(input.saleScheduleEndAt ?? null) : null;
+  if (saleScheduleStartAt && saleScheduleEndAt && Date.parse(saleScheduleEndAt) <= Date.parse(saleScheduleStartAt)) {
+    saleScheduleEndAt = null;
+  }
+
   const item: Product = {
     id: nextId("PRD"),
     name: asSafeString(input.name),
-    category: asSafeString(input.category),
+    category: normalizedCategories[0],
+    categories: normalizedCategories,
+    visibility: normalizeProductVisibility(input.visibility ?? "Public"),
+    visibilityPassword: asSafeString(input.visibilityPassword),
     description: asSafeString(input.description),
     image: asSafeString(input.image),
     gallery: normalizeStringArray(input.gallery),
     tags: normalizeStringArray(input.tags),
     slug: asSafeString(input.slug) || asSafeString(input.name),
-    price: input.price,
+    price: money(input.price),
+    salePrice: normalizedSalePrice,
+    saleScheduleStartAt,
+    saleScheduleEndAt,
     stock: input.stock,
     publishStatus: normalizePublicationStatus(input.publishStatus ?? "Draft"),
     trashedAt: null,
@@ -2534,6 +3033,7 @@ export function addProduct(input: ProductInput): Product {
   const s = store();
   s.products.unshift(item);
   normalizeProductsInPlace(s.products);
+  ensureTaxonomiesInPlace(s);
   ensureProductMediaInLibraryInPlace(s);
   normalizeMediaInPlace(s.media);
   return cloneProduct(item);
@@ -2545,8 +3045,43 @@ export function updateProduct(productId: string, input: ProductInput): Product |
   if (!target) return null;
 
   target.name = asSafeString(input.name);
-  target.category = asSafeString(input.category);
-  target.price = input.price;
+  const nextCategories = normalizeStringArray(input.categories);
+  const fallbackCategory = asSafeString(input.category);
+  if (nextCategories.length === 0 && fallbackCategory) {
+    nextCategories.push(fallbackCategory);
+  }
+  target.categories = nextCategories.length > 0 ? nextCategories : target.categories;
+  target.category = target.categories[0] ?? fallbackCategory;
+  if (input.visibility !== undefined) {
+    target.visibility = normalizeProductVisibility(input.visibility);
+  }
+  if (input.visibilityPassword !== undefined) {
+    target.visibilityPassword =
+      normalizeProductVisibility(target.visibility) === "Password" ? asSafeString(input.visibilityPassword) : "";
+  }
+  target.price = money(input.price);
+  if (input.salePrice !== undefined) {
+    target.salePrice = normalizeSalePrice(target.price, input.salePrice);
+  } else {
+    target.salePrice = normalizeSalePrice(target.price, target.salePrice);
+  }
+  if (input.saleScheduleStartAt !== undefined) {
+    target.saleScheduleStartAt = normalizeSaleScheduleDate(input.saleScheduleStartAt);
+  }
+  if (input.saleScheduleEndAt !== undefined) {
+    target.saleScheduleEndAt = normalizeSaleScheduleDate(input.saleScheduleEndAt);
+  }
+  if (
+    target.saleScheduleStartAt &&
+    target.saleScheduleEndAt &&
+    Date.parse(target.saleScheduleEndAt) <= Date.parse(target.saleScheduleStartAt)
+  ) {
+    target.saleScheduleEndAt = null;
+  }
+  if (target.salePrice === null) {
+    target.saleScheduleStartAt = null;
+    target.saleScheduleEndAt = null;
+  }
   target.stock = input.stock;
 
   if (input.slug !== undefined) {
@@ -2569,6 +3104,7 @@ export function updateProduct(productId: string, input: ProductInput): Product |
   }
 
   normalizeProductsInPlace(s.products);
+  ensureTaxonomiesInPlace(s);
   ensureProductMediaInLibraryInPlace(s);
   normalizeMediaInPlace(s.media);
   return cloneProduct(target);
@@ -2618,8 +3154,9 @@ export function addOrder(input: {
 }): Order {
   const s = store();
   const product = s.products.find((item) => item.id === input.productId);
-  const productPrice = product?.price ?? 0;
-  const baseTotal = money(input.quantity * productPrice);
+  const productPrice = product ? getEffectiveProductPricing(product).current : 0;
+  const quantity = Math.max(1, Math.floor(input.quantity));
+  const baseTotal = money(quantity * productPrice);
   const discount = money(input.discount ?? 0);
   const totalFromInput = input.total !== undefined ? money(input.total) : money(baseTotal - discount);
 
@@ -2628,7 +3165,7 @@ export function addOrder(input: {
     customer: asSafeString(input.customer),
     userId: asSafeString(input.userId ?? "") || null,
     productId: input.productId,
-    quantity: Math.max(1, Math.floor(input.quantity)),
+    quantity,
     total: totalFromInput,
     discount,
     couponCode: input.couponCode ? normalizeCouponCode(input.couponCode) : null,
@@ -2636,6 +3173,9 @@ export function addOrder(input: {
     createdAt: new Date().toISOString().slice(0, 10),
   };
   s.orders.unshift(order);
+  if (product) {
+    product.stock = Math.max(0, product.stock - quantity);
+  }
   if (s.settings.notifyAdminPaidOrder) {
     pushAdminNotification({
       type: "Order",
@@ -2657,7 +3197,7 @@ export function updateOrder(orderId: string, input: OrderUpdateInput): Order | n
   if (!target) return null;
 
   const product = store().products.find((item) => item.id === input.productId);
-  const productPrice = product?.price ?? 0;
+  const productPrice = product ? getEffectiveProductPricing(product).current : 0;
   const quantity = Math.max(1, Math.floor(input.quantity));
   const baseTotal = money(quantity * productPrice);
   const discount = money(input.discount ?? 0);
@@ -2881,6 +3421,9 @@ export function updateSiteSettings(input: Partial<SiteSettings>): SiteSettings {
   if (input.layoutMaxWidthPx !== undefined) {
     target.layoutMaxWidthPx = Math.max(0, Math.floor(Number(input.layoutMaxWidthPx) || 0));
   }
+  if (input.mediaUploadMaxMb !== undefined) {
+    target.mediaUploadMaxMb = Math.max(1, Math.floor(Number(input.mediaUploadMaxMb) || 1));
+  }
   if (input.logoUrl !== undefined) {
     target.logoUrl = asSafeString(input.logoUrl);
   }
@@ -2976,6 +3519,45 @@ export function updateSiteSettings(input: Partial<SiteSettings>): SiteSettings {
   }
   if (input.notifyLowStock !== undefined) {
     target.notifyLowStock = Boolean(input.notifyLowStock);
+  }
+  if (input.paymentCadEnabled !== undefined) {
+    target.paymentCadEnabled = Boolean(input.paymentCadEnabled);
+  }
+  if (input.paymentBankTransferEnabled !== undefined) {
+    target.paymentBankTransferEnabled = Boolean(input.paymentBankTransferEnabled);
+  }
+  if (input.paymentStripeDemoEnabled !== undefined) {
+    target.paymentStripeDemoEnabled = Boolean(input.paymentStripeDemoEnabled);
+  }
+  if (input.paymentBankTransferInstructions !== undefined) {
+    target.paymentBankTransferInstructions = asSafeString(input.paymentBankTransferInstructions);
+  }
+  if (input.shippingStandardEnabled !== undefined) {
+    target.shippingStandardEnabled = Boolean(input.shippingStandardEnabled);
+  }
+  if (input.shippingStandardLabel !== undefined) {
+    target.shippingStandardLabel = asSafeString(input.shippingStandardLabel);
+  }
+  if (input.shippingStandardEta !== undefined) {
+    target.shippingStandardEta = asSafeString(input.shippingStandardEta);
+  }
+  if (input.shippingStandardPrice !== undefined) {
+    target.shippingStandardPrice = money(Number(input.shippingStandardPrice) || 0);
+  }
+  if (input.shippingExpressEnabled !== undefined) {
+    target.shippingExpressEnabled = Boolean(input.shippingExpressEnabled);
+  }
+  if (input.shippingExpressLabel !== undefined) {
+    target.shippingExpressLabel = asSafeString(input.shippingExpressLabel);
+  }
+  if (input.shippingExpressEta !== undefined) {
+    target.shippingExpressEta = asSafeString(input.shippingExpressEta);
+  }
+  if (input.shippingExpressPrice !== undefined) {
+    target.shippingExpressPrice = money(Number(input.shippingExpressPrice) || 0);
+  }
+  if (input.shippingFreeThreshold !== undefined) {
+    target.shippingFreeThreshold = money(Number(input.shippingFreeThreshold) || 0);
   }
 
   normalizeSiteSettingsInPlace(target);

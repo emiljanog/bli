@@ -67,6 +67,13 @@ export function middleware(request: NextRequest) {
     return withNoStore(NextResponse.redirect(myAccountUrl));
   }
 
+  if (pathname === "/dashboard/media/new" || pathname === "/admin/media/new") {
+    const mediaUploadUrl = request.nextUrl.clone();
+    mediaUploadUrl.pathname = "/dashboard/media";
+    mediaUploadUrl.searchParams.set("upload", "1");
+    return withNoStore(NextResponse.redirect(mediaUploadUrl));
+  }
+
   if (pathname === "/admin" || pathname.startsWith("/admin/")) {
     const dashboardUrl = request.nextUrl.clone();
     dashboardUrl.pathname = toDashboardPath(pathname);

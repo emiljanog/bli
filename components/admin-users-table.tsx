@@ -187,15 +187,6 @@ export function AdminUsersTable({
       >
         <div className="flex flex-wrap items-center gap-3">
           <p className="text-xs font-semibold text-slate-600">{showingText}</p>
-          <label className="inline-flex items-center gap-2 text-xs font-semibold text-slate-700">
-            <input
-              type="checkbox"
-              checked={allChecked}
-              onChange={(event) => toggleAll(event.target.checked)}
-              className="h-4 w-4 rounded border-slate-300"
-            />
-            Select all on page
-          </label>
           <span className="text-xs font-semibold text-slate-500">Selected: {selectedIds.length}</span>
         </div>
 

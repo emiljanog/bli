@@ -30,11 +30,38 @@ export function AdminSidebar({
   brandingVersion = 1,
 }: AdminSidebarProps) {
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
-  const [logoVisible, setLogoVisible] = useState(!defaultCollapsed);
+  const [isDesktop, setIsDesktop] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [logoVisible, setLogoVisible] = useState(true);
+
+  const effectiveCollapsed = isDesktop ? collapsed : false;
+  const shouldShowNav = isDesktop || mobileMenuOpen;
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(min-width: 1024px)");
+
+    const handleViewportChange = (event: MediaQueryListEvent | MediaQueryList) => {
+      const desktop = "matches" in event ? event.matches : mediaQuery.matches;
+      setIsDesktop(desktop);
+      if (desktop) {
+        setMobileMenuOpen(false);
+      }
+    };
+
+    handleViewportChange(mediaQuery);
+
+    if (typeof mediaQuery.addEventListener === "function") {
+      mediaQuery.addEventListener("change", handleViewportChange);
+      return () => mediaQuery.removeEventListener("change", handleViewportChange);
+    }
+
+    mediaQuery.addListener(handleViewportChange);
+    return () => mediaQuery.removeListener(handleViewportChange);
+  }, []);
 
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | null = null;
-    if (collapsed) {
+    if (effectiveCollapsed) {
       timer = setTimeout(() => setLogoVisible(false), 0);
     } else {
       timer = setTimeout(() => setLogoVisible(true), 170);
@@ -43,9 +70,9 @@ export function AdminSidebar({
     return () => {
       if (timer) clearTimeout(timer);
     };
-  }, [collapsed]);
+  }, [effectiveCollapsed]);
 
-  function handleToggleMenu() {
+  function handleToggleSidebar() {
     setCollapsed((previous) => {
       const next = !previous;
       window.localStorage.setItem(ADMIN_SIDEBAR_COOKIE_NAME, next ? "1" : "0");
@@ -61,12 +88,16 @@ export function AdminSidebar({
   return (
     <aside
       className={`overflow-x-visible overflow-y-hidden border-b border-slate-200 bg-[#f1f1f1] px-3 py-6 transition-[width] duration-300 ease-in-out lg:sticky lg:top-0 lg:z-30 lg:h-screen lg:overflow-visible lg:border-b-0 lg:border-r ${
-        collapsed ? "lg:w-[92px]" : "lg:w-[260px]"
+        effectiveCollapsed ? "lg:w-[92px]" : "lg:w-[260px]"
       }`}
     >
-      <div className={collapsed ? "mb-3 flex justify-center" : "mb-7 rounded-xl bg-white p-3 shadow-sm"}>
+      <div
+        className={
+          effectiveCollapsed ? "mb-3 flex justify-center lg:mb-3" : "mb-3 rounded-xl bg-white p-3 shadow-sm lg:mb-7"
+        }
+      >
         <div className="flex items-center justify-between gap-2">
-          {!collapsed ? (
+          {!effectiveCollapsed ? (
             <Link
               href="/dashboard"
               aria-label="Open dashboard"
@@ -82,19 +113,43 @@ export function AdminSidebar({
             </Link>
           ) : null}
 
-          <div className={`flex items-center ${collapsed ? "justify-center" : "gap-1"}`}>
+          <div className={`flex items-center ${effectiveCollapsed ? "justify-center" : "gap-1"}`}>
             <button
               type="button"
-              onClick={handleToggleMenu}
-              aria-label={collapsed ? "Open menu" : "Collapse menu"}
-              className="inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-100"
+              onClick={() => setMobileMenuOpen((previous) => !previous)}
+              aria-expanded={mobileMenuOpen}
+              aria-controls="admin-mobile-nav"
+              aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
+              className="inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-100 lg:hidden"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
+                {mobileMenuOpen ? (
+                  <>
+                    <path d="M18 6 6 18" />
+                    <path d="m6 6 12 12" />
+                  </>
+                ) : (
+                  <>
+                    <path d="M4 7h16" />
+                    <path d="M4 12h16" />
+                    <path d="M4 17h16" />
+                  </>
+                )}
+              </svg>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleToggleSidebar}
+              aria-label={effectiveCollapsed ? "Open menu" : "Collapse menu"}
+              className="hidden h-10 w-10 cursor-pointer items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-100 lg:inline-flex"
             >
               <svg
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
                 strokeWidth="2"
-                className={`h-5 w-5 transition-transform duration-300 ${collapsed ? "rotate-180" : ""}`}
+                className={`h-5 w-5 transition-transform duration-300 ${effectiveCollapsed ? "rotate-180" : ""}`}
               >
                 <path d="M15 6l-6 6 6 6" />
               </svg>
@@ -104,11 +159,12 @@ export function AdminSidebar({
       </div>
 
       <div
-        className={`${
-          collapsed ? "overflow-visible" : "max-h-[calc(100vh-130px)] overflow-y-auto overflow-x-hidden pr-1"
+        id="admin-mobile-nav"
+        className={`${shouldShowNav ? "block" : "hidden"} lg:block ${
+          effectiveCollapsed ? "overflow-visible" : "max-h-[calc(100vh-130px)] overflow-y-auto overflow-x-hidden pr-1"
         }`}
       >
-        <AdminNav collapsed={collapsed} role={role} />
+        <AdminNav collapsed={effectiveCollapsed} role={role} />
       </div>
     </aside>
   );

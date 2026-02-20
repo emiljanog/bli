@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { ReactNode } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
@@ -12,6 +11,7 @@ import {
 } from "@/lib/admin-auth";
 import { logoutAdminAction } from "@/app/dashboard/actions";
 import { AdminGlobalSearch } from "@/components/admin-global-search";
+import { AdminBlackToolbar } from "@/components/admin-black-toolbar";
 import { AdminNotificationsMenu } from "@/components/admin-notifications-menu";
 import { AdminSidebar } from "@/components/admin-sidebar";
 import { AdminThemeToggle } from "@/components/admin-theme-toggle";
@@ -51,6 +51,14 @@ export async function AdminShell({ title, description, children }: AdminShellPro
 
   return (
     <main className="admin-theme min-h-screen bg-[var(--admin-app-bg)] text-[var(--admin-text)]">
+      <AdminBlackToolbar
+        username={adminUsername || "admin"}
+        displayName={currentUser?.name || adminUsername || "Admin"}
+        avatarUrl={adminAvatarUrl}
+        profileHref={profileHref}
+        dashboardMode
+        sticky
+      />
       <div className="grid min-h-screen lg:grid-cols-[auto_1fr]">
         <AdminSidebar
           defaultCollapsed={defaultSidebarCollapsed}
@@ -63,34 +71,27 @@ export async function AdminShell({ title, description, children }: AdminShellPro
 
         <div className="px-4 py-5 md:px-8 md:py-7">
           <header className="mb-6 overflow-visible rounded-2xl border border-[var(--admin-border)] bg-[var(--admin-header-bg)]">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--admin-border)] px-4 py-3 md:px-6">
-              <AdminGlobalSearch />
-              <div className="flex items-center gap-2 text-[var(--admin-muted)]">
-                <Link
-                  href="/"
-                  target="_blank"
-                  rel="noreferrer"
-                  aria-label="Open web"
-                  title="Open web"
-                  className="inline-flex h-9 w-9 items-center justify-center rounded-full transition hover:bg-[var(--admin-hover-bg)] hover:text-[var(--admin-text)]"
-                >
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
-                    <circle cx="12" cy="12" r="9" />
-                    <path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" />
-                  </svg>
-                </Link>
-                <AdminThemeToggle />
-                <AdminNotificationsMenu
-                  initialNotifications={adminNotifications}
-                  initialUnreadCount={unreadNotifications}
-                />
-                <AdminUserMenu
-                  username={adminUsername || "Admin"}
-                  role={adminRole}
-                  avatarUrl={adminAvatarUrl}
-                  profileHref={profileHref}
-                  compact
-                />
+            <div className="flex flex-wrap items-center gap-3 border-b border-[var(--admin-border)] px-4 py-3 md:px-6">
+              <div className="min-w-0 flex-1">
+                <AdminGlobalSearch />
+              </div>
+              <div className="flex w-full items-center justify-end text-[var(--admin-muted)] md:w-auto">
+                <div className="flex items-center gap-2">
+                  <AdminThemeToggle size="large" />
+                  <AdminNotificationsMenu
+                    initialNotifications={adminNotifications}
+                    initialUnreadCount={unreadNotifications}
+                    size="large"
+                  />
+                  <AdminUserMenu
+                    username={adminUsername || "Admin"}
+                    role={adminRole}
+                    avatarUrl={adminAvatarUrl}
+                    profileHref={profileHref}
+                    compact
+                    compactLarge
+                  />
+                </div>
               </div>
             </div>
 
