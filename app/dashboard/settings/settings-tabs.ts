@@ -25,7 +25,7 @@ export const SETTINGS_TABS: SettingsTabItem[] = [
   },
   {
     slug: "brand",
-    label: "Branding & Theme",
+    label: "Branding",
     title: "Branding Typography & Color System",
     description: "Configure fonts and brand colors used across website and dashboard.",
     group: "Website",
@@ -46,7 +46,7 @@ export const SETTINGS_TABS: SettingsTabItem[] = [
   },
   {
     slug: "emails",
-    label: "Emails & Notifications",
+    label: "Emails",
     title: "Emails & Notifications",
     description: "Configure SMTP/PHPMailer/React Email and alert toggles for store events.",
     group: "System",

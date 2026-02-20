@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
-type AdminNotificationItem = {
+export type AdminNotificationItem = {
   id: string;
   type: "Order" | "Ticket" | "User";
   title: string;
@@ -68,7 +68,7 @@ export function AdminNotificationsMenu({
   const knownIdsRef = useRef<Set<string>>(new Set(initialNotifications.map((item) => item.id)));
   const [open, setOpen] = useState(false);
   const [isDesktop, setIsDesktop] = useState(false);
-  const [panelTop, setPanelTop] = useState(64);
+  const [panelTop, setPanelTop] = useState(52);
   const [notifications, setNotifications] = useState<AdminNotificationItem[]>(initialNotifications);
   const [unreadCount, setUnreadCount] = useState(initialUnreadCount);
   const [isMarking, setIsMarking] = useState(false);
@@ -91,25 +91,24 @@ export function AdminNotificationsMenu({
   }, []);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || isDesktop) return;
 
     const updatePanelTop = () => {
       if (!rootRef.current) return;
       const rect = rootRef.current.getBoundingClientRect();
       const rawTop = Math.round(rect.bottom + 8);
-      const maxAllowedTop = Math.max(8, window.innerHeight - 80);
+      const maxAllowedTop = Math.max(8, window.innerHeight - 100);
       setPanelTop(Math.max(8, Math.min(rawTop, maxAllowedTop)));
     };
 
     updatePanelTop();
     window.addEventListener("resize", updatePanelTop);
     window.addEventListener("scroll", updatePanelTop, true);
-
     return () => {
       window.removeEventListener("resize", updatePanelTop);
       window.removeEventListener("scroll", updatePanelTop, true);
     };
-  }, [isDesktop, open]);
+  }, [open, isDesktop]);
 
   useEffect(() => {
     let canceled = false;
@@ -154,14 +153,29 @@ export function AdminNotificationsMenu({
 
   useEffect(() => {
     if (!open) return;
-    function onOutsideClick(event: MouseEvent) {
+    function onOutsideClick(event: globalThis.MouseEvent | TouchEvent) {
       if (!rootRef.current) return;
       if (!rootRef.current.contains(event.target as Node)) {
         setOpen(false);
       }
     }
     document.addEventListener("mousedown", onOutsideClick);
-    return () => document.removeEventListener("mousedown", onOutsideClick);
+    document.addEventListener("touchstart", onOutsideClick);
+    return () => {
+      document.removeEventListener("mousedown", onOutsideClick);
+      document.removeEventListener("touchstart", onOutsideClick);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    function onEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("keydown", onEscape);
+    return () => document.removeEventListener("keydown", onEscape);
   }, [open]);
 
   async function markAllAsRead() {
@@ -224,22 +238,24 @@ export function AdminNotificationsMenu({
           <path d="M10 17a2 2 0 0 0 4 0" />
         </svg>
         {unreadCount > 0 ? (
-          <span className="absolute bottom-0 right-0 inline-flex h-4 min-w-4 translate-x-1/3 translate-y-1/3 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-semibold leading-none text-white">
+          <span className="absolute left-0 top-0 inline-flex h-4 min-w-4 -translate-x-1/3 -translate-y-1/3 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-semibold leading-none text-white">
             {unreadCount > 99 ? "99+" : unreadCount}
           </span>
         ) : null}
       </button>
 
       <div
-        className={`fixed z-[230] flex flex-col overflow-hidden rounded-xl border border-[var(--admin-border)] bg-[var(--admin-panel-bg)] shadow-lg transition ${
-          isDesktop ? "right-[50px] w-[400px]" : "left-[13px] right-[13px]"
-        } ${
+        className={`${isDesktop ? "absolute right-0 top-[calc(100%+8px)] h-[60vh] w-[400px]" : "fixed left-3 right-3"} z-[230] flex flex-col overflow-hidden rounded-xl border border-[var(--admin-border)] bg-[var(--admin-panel-bg)] shadow-lg transition ${
           open ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"
         }`}
-        style={{
-          top: `${panelTop}px`,
-          height: isDesktop ? "60vh" : `calc(100dvh - ${panelTop}px)`,
-        }}
+        style={
+          isDesktop
+            ? undefined
+            : {
+                top: `${panelTop}px`,
+                height: `calc(100dvh - ${panelTop}px - 12px)`,
+              }
+        }
       >
         <div className="flex items-center justify-between gap-2 border-b border-[var(--admin-border)] px-3 py-2">
           <p className="text-sm font-semibold text-[var(--admin-text)]">Notifications</p>

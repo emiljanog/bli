@@ -208,40 +208,6 @@ const settingsItems: NavLinkItem[] = SETTINGS_TABS.map((tab) => {
   };
 });
 
-const usersItems: NavLinkItem[] = [
-  {
-    label: "Admins",
-    href: "/dashboard/users?role=Admin",
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
-        <circle cx="9" cy="8" r="3" />
-        <path d="M3 20a6 6 0 0 1 12 0" />
-      </svg>
-    ),
-  },
-  {
-    label: "Super Admin",
-    href: "/dashboard/users?role=Super%20Admin",
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
-        <circle cx="9" cy="8" r="3" />
-        <path d="M3 20a6 6 0 0 1 12 0" />
-        <path d="M17 7h4M19 5v4" />
-      </svg>
-    ),
-  },
-  {
-    label: "Customers",
-    href: "/dashboard/users?role=Customer",
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
-        <circle cx="12" cy="8" r="4" />
-        <path d="M4 20a8 8 0 0 1 16 0" />
-      </svg>
-    ),
-  },
-];
-
 const mainItems: NavLinkItem[] = [
   {
     label: "Dashboard",
@@ -286,7 +252,7 @@ const mainItems: NavLinkItem[] = [
     ),
   },
   {
-    label: "Help Tickets",
+    label: "Tickets",
     href: "/dashboard/help-tickets",
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
@@ -296,6 +262,12 @@ const mainItems: NavLinkItem[] = [
     ),
   },
 ];
+
+const usersItem: NavLinkItem = {
+  label: "Users",
+  href: "/dashboard/users",
+  icon: usersIcon,
+};
 
 function isLinkActive(pathname: string, item: NavLinkItem, searchParams?: SearchParamsLike): boolean {
   if (item.external) return false;
@@ -337,8 +309,8 @@ function NavLink({
       href={item.href}
       target={item.external ? "_blank" : undefined}
       rel={item.external ? "noreferrer" : undefined}
-      className={`group relative flex items-center rounded-xl px-3 py-2.5 text-sm font-semibold transition ${
-        collapsed ? "justify-center" : ""
+      className={`group relative flex items-center rounded-xl py-2.5 text-sm font-semibold transition ${
+        collapsed ? "justify-center px-3" : "px-[19px]"
       } ${isActive ? "site-primary-bg text-white" : "text-slate-600 hover:bg-slate-200/70"} ${className ?? ""}`}
       title={collapsed ? item.label : undefined}
     >
@@ -348,7 +320,7 @@ function NavLink({
           {item.label}
         </span>
       ) : (
-        <span className={item.icon ? "ml-3" : ""}>{item.label}</span>
+        <span className={`${item.icon ? "ml-3" : ""} whitespace-nowrap`}>{item.label}</span>
       )}
     </Link>
   );
@@ -568,12 +540,12 @@ function ExpandedGroup({
       <button
         type="button"
         onClick={mobileMode ? () => setOpen((previous) => !previous) : undefined}
-        className={`flex w-full items-center rounded-lg px-2 py-2 text-sm font-semibold transition ${
+        className={`flex w-full items-center rounded-xl px-[19px] py-2 text-sm font-semibold transition ${
           active ? "site-primary-text" : "text-slate-600 hover:bg-slate-200/70"
         }`}
       >
         {icon}
-        <span className="ml-2">{label}</span>
+        <span className="ml-3 whitespace-nowrap">{label}</span>
         <svg
           viewBox="0 0 24 24"
           fill="none"
@@ -628,15 +600,17 @@ export function AdminNav({ collapsed = false, role }: AdminNavProps) {
   const isDesktop = useDesktopNav();
   const isStoreActive = storeItems.some((item) => isLinkActive(pathname, item, searchParams));
   const isSettingsActive = settingsItems.some((item) => isLinkActive(pathname, item, searchParams));
-  const isUsersActive = usersItems.some((item) => isLinkActive(pathname, item, searchParams));
   const isManager = role === "Manager";
   const showSettingsGroup = canAccessSettings(role) && !isManager;
-  const showUsersGroup = !isManager;
-  const visibleMainItems = mainItems.filter((item) => (isManager ? item.href === "/dashboard" : true));
+  const showUsersLink = !isManager;
+  const visibleMainItems = [
+    ...mainItems.filter((item) => (isManager ? item.href === "/dashboard" : true)),
+    ...(showUsersLink ? [usersItem] : []),
+  ];
 
   if (collapsed) {
     return (
-      <nav className="space-y-1">
+      <nav className="space-y-1 lg:w-max">
         {visibleMainItems.map((item) => (
           <NavLink key={item.href} item={item} collapsed pathname={pathname} searchParams={searchParams} />
         ))}
@@ -660,23 +634,12 @@ export function AdminNav({ collapsed = false, role }: AdminNavProps) {
             active={isSettingsActive}
           />
         ) : null}
-
-        {showUsersGroup ? (
-          <CollapsedGroup
-            label="Users"
-            icon={usersIcon}
-            items={usersItems}
-            pathname={pathname}
-            searchParams={searchParams}
-            active={isUsersActive}
-          />
-        ) : null}
       </nav>
     );
   }
 
   return (
-    <nav className="space-y-1">
+    <nav className="space-y-1 lg:w-max">
       {visibleMainItems.map((item) => (
         <NavLink key={item.href} item={item} collapsed={false} pathname={pathname} searchParams={searchParams} />
       ))}
@@ -699,18 +662,6 @@ export function AdminNav({ collapsed = false, role }: AdminNavProps) {
           pathname={pathname}
           searchParams={searchParams}
           active={isSettingsActive}
-          mobileMode={!isDesktop}
-        />
-      ) : null}
-
-      {showUsersGroup ? (
-        <ExpandedGroup
-          label="Users"
-          icon={usersIcon}
-          items={usersItems}
-          pathname={pathname}
-          searchParams={searchParams}
-          active={isUsersActive}
           mobileMode={!isDesktop}
         />
       ) : null}

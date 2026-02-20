@@ -121,6 +121,7 @@ export type User = {
   createdAt: string;
   isActive: boolean;
   passwordResetRequired: boolean;
+  showToolbar: boolean;
 };
 
 export type Page = {
@@ -316,6 +317,7 @@ type UserInput = {
   city?: string;
   address?: string;
   source?: UserSource;
+  showToolbar?: boolean;
 };
 
 type UserUpdateInput = {
@@ -329,6 +331,7 @@ type UserUpdateInput = {
   phone?: string;
   city?: string;
   address?: string;
+  showToolbar?: boolean;
 };
 
 type PageInput = {
@@ -1382,6 +1385,9 @@ function normalizeUsersInPlace(users: User[]): void {
     if (typeof user.passwordResetRequired !== "boolean") {
       user.passwordResetRequired = false;
     }
+    if (typeof user.showToolbar !== "boolean") {
+      user.showToolbar = true;
+    }
 
     if (seenEmails.has(user.email)) {
       user.email = `${user.id.toLowerCase()}@bli.local`;
@@ -1730,6 +1736,7 @@ function generateDemoUsers(count: number, startId = 7101): User[] {
       createdAt: demoDateByIndex(index),
       isActive: true,
       passwordResetRequired: false,
+      showToolbar: true,
     };
   });
 }
@@ -1868,6 +1875,7 @@ function createInitialStore(): Store {
         createdAt: "2026-02-01",
         isActive: true,
         passwordResetRequired: false,
+        showToolbar: true,
       },
       ...generateDemoUsers(100, 7002),
     ],
@@ -1908,6 +1916,7 @@ function migrateLegacyUsersInPlace(s: Store): void {
       createdAt: existingEmiljano?.createdAt || "2026-02-01",
       isActive: true,
       passwordResetRequired: false,
+      showToolbar: existingEmiljano?.showToolbar ?? true,
     },
     ...generateDemoUsers(100, 7002),
   ];
@@ -2652,6 +2661,7 @@ export function addUser(input: UserInput): User | null {
     createdAt: new Date().toISOString().slice(0, 10),
     isActive: true,
     passwordResetRequired: false,
+    showToolbar: input.showToolbar !== false,
   };
 
   users.unshift(user);
@@ -2692,6 +2702,9 @@ export function updateUser(userId: string, input: UserUpdateInput): User | null 
   target.phone = asSafeString(input.phone);
   target.city = asSafeString(input.city);
   target.address = asSafeString(input.address);
+  if (input.showToolbar !== undefined) {
+    target.showToolbar = Boolean(input.showToolbar);
+  }
 
   return cloneUser(target);
 }

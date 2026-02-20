@@ -12,10 +12,7 @@ import {
 import { logoutAdminAction } from "@/app/dashboard/actions";
 import { AdminGlobalSearch } from "@/components/admin-global-search";
 import { AdminBlackToolbar } from "@/components/admin-black-toolbar";
-import { AdminNotificationsMenu } from "@/components/admin-notifications-menu";
 import { AdminSidebar } from "@/components/admin-sidebar";
-import { AdminThemeToggle } from "@/components/admin-theme-toggle";
-import { AdminUserMenu } from "@/components/admin-user-menu";
 import {
   countUnreadAdminNotifications,
   findUserByUsername,
@@ -41,6 +38,12 @@ export async function AdminShell({ title, description, children }: AdminShellPro
   const unreadNotifications = countUnreadAdminNotifications();
   const adminAvatarUrl = currentUser?.avatarUrl || "";
   const profileHref = currentUser ? `/dashboard/users/${currentUser.id}` : "/my-account";
+  const effectiveToolbarRole = currentUser?.role ?? adminRole;
+  const canRenderToolbar =
+    effectiveToolbarRole === "Super Admin" ||
+    effectiveToolbarRole === "Admin" ||
+    effectiveToolbarRole === "Manager";
+  const showToolbar = canRenderToolbar && (currentUser?.showToolbar ?? true);
 
   if (!isLoggedIn) {
     redirect("/login");
@@ -51,14 +54,19 @@ export async function AdminShell({ title, description, children }: AdminShellPro
 
   return (
     <main className="admin-theme min-h-screen bg-[var(--admin-app-bg)] text-[var(--admin-text)]">
-      <AdminBlackToolbar
-        username={adminUsername || "admin"}
-        displayName={currentUser?.name || adminUsername || "Admin"}
-        avatarUrl={adminAvatarUrl}
-        profileHref={profileHref}
-        dashboardMode
-        sticky
-      />
+      {showToolbar ? (
+        <AdminBlackToolbar
+          username={adminUsername || "admin"}
+          displayName={currentUser?.name || adminUsername || "Admin"}
+          avatarUrl={adminAvatarUrl}
+          profileHref={profileHref}
+          dashboardMode
+          sticky
+          showAdminControls
+          initialNotifications={adminNotifications}
+          initialUnreadCount={unreadNotifications}
+        />
+      ) : null}
       <div className="grid min-h-screen lg:grid-cols-[auto_1fr]">
         <AdminSidebar
           defaultCollapsed={defaultSidebarCollapsed}
@@ -67,6 +75,7 @@ export async function AdminShell({ title, description, children }: AdminShellPro
           iconUrl={siteSettings.iconUrl}
           siteTitle={siteSettings.siteTitle}
           brandingVersion={siteSettings.brandingVersion}
+          topOffsetPx={showToolbar ? 40 : 0}
         />
 
         <div className="px-4 py-5 md:px-8 md:py-7">
@@ -74,24 +83,6 @@ export async function AdminShell({ title, description, children }: AdminShellPro
             <div className="flex flex-wrap items-center gap-3 border-b border-[var(--admin-border)] px-4 py-3 md:px-6">
               <div className="min-w-0 flex-1">
                 <AdminGlobalSearch />
-              </div>
-              <div className="flex w-full items-center justify-end text-[var(--admin-muted)] md:w-auto">
-                <div className="flex items-center gap-2">
-                  <AdminThemeToggle size="large" />
-                  <AdminNotificationsMenu
-                    initialNotifications={adminNotifications}
-                    initialUnreadCount={unreadNotifications}
-                    size="large"
-                  />
-                  <AdminUserMenu
-                    username={adminUsername || "Admin"}
-                    role={adminRole}
-                    avatarUrl={adminAvatarUrl}
-                    profileHref={profileHref}
-                    compact
-                    compactLarge
-                  />
-                </div>
               </div>
             </div>
 

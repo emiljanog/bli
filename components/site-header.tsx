@@ -2,25 +2,19 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { logoutAdminAction } from "@/app/dashboard/actions";
-import { AdminBlackToolbar } from "@/components/admin-black-toolbar";
 import type { SiteSettings } from "@/lib/shop-store";
 import { getCartCount, subscribeCartUpdates } from "@/lib/cart";
 
 type SiteHeaderProps = {
   siteSettings: SiteSettings;
-  adminToolbar?: {
-    username: string;
-    displayName: string;
-    avatarUrl: string;
-    profileHref: string;
-  } | null;
   accountUser?: {
     username: string;
     displayName: string;
     avatarUrl: string;
   } | null;
+  topOffsetPx?: number;
 };
 
 function withAssetVersion(url: string, version: number): string {
@@ -39,45 +33,27 @@ type ProductSearchResult = {
   price: number;
 };
 
-function toPathSegments(pathname: string): string[] {
-  return pathname
-    .split("/")
-    .map((segment) => segment.trim())
-    .filter(Boolean);
+function normalizePath(path: string): string {
+  const basePath = (path.split("?")[0] || "").trim();
+  if (!basePath) return "/";
+  if (basePath.length > 1 && basePath.endsWith("/")) {
+    return basePath.slice(0, -1);
+  }
+  return basePath;
 }
 
-function getQuickEditHref(pathname: string): string | null {
-  const segments = toPathSegments(pathname);
-  if (segments.length === 0) return null;
-
-  if ((segments[0] === "product" || segments[0] === "shop") && segments.length >= 2) {
-    return `/dashboard/products/by-slug/${encodeURIComponent(segments[1])}`;
-  }
-
-  if (segments.length === 1) {
-    const slug = segments[0].toLowerCase();
-    const blockedSlugs = new Set([
-      "shop",
-      "product",
-      "collections",
-      "cart",
-      "checkout",
-      "contact",
-      "my-account",
-      "login",
-      "dashboard",
-      "user",
-      "api",
-    ]);
-    if (!blockedSlugs.has(slug)) {
-      return `/dashboard/pages/by-slug/${encodeURIComponent(segments[0])}`;
-    }
-  }
-
-  return null;
+function isMenuItemActive(pathname: string, href: string): boolean {
+  const current = normalizePath(pathname);
+  const target = normalizePath(href);
+  if (target === "/") return current === "/";
+  return current === target || current.startsWith(`${target}/`);
 }
 
-export function SiteHeader({ siteSettings, adminToolbar = null, accountUser = null }: SiteHeaderProps) {
+export function SiteHeader({
+  siteSettings,
+  accountUser = null,
+  topOffsetPx = 0,
+}: SiteHeaderProps) {
   const pathname = usePathname();
   const router = useRouter();
   const menuItems = siteSettings.headerMenu;
@@ -92,9 +68,10 @@ export function SiteHeader({ siteSettings, adminToolbar = null, accountUser = nu
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState("");
   const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const searchToggleRef = useRef<HTMLButtonElement | null>(null);
+  const searchPanelRef = useRef<HTMLDivElement | null>(null);
   const siteAccountCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const siteAccountRootRef = useRef<HTMLDivElement | null>(null);
-  const quickEditHref = useMemo(() => getQuickEditHref(pathname), [pathname]);
 
   useEffect(() => {
     const onScroll = () => setIsScrolled(window.scrollY > 24);
@@ -183,6 +160,21 @@ export function SiteHeader({ siteSettings, adminToolbar = null, accountUser = nu
   }, [searchOpen]);
 
   useEffect(() => {
+    if (!searchOpen) return;
+
+    const handleDocumentClick = (event: MouseEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (searchToggleRef.current?.contains(target)) return;
+      if (searchPanelRef.current?.contains(target)) return;
+      setSearchOpen(false);
+    };
+
+    document.addEventListener("mousedown", handleDocumentClick);
+    return () => document.removeEventListener("mousedown", handleDocumentClick);
+  }, [searchOpen]);
+
+  useEffect(() => {
     if (!searchOpen) {
       setSearchLoading(false);
       setSearchError("");
@@ -236,7 +228,7 @@ export function SiteHeader({ siteSettings, adminToolbar = null, accountUser = nu
   }, [searchOpen, searchValue]);
 
   const handleSiteAccountOpenDesktop = () => {
-    if (!isDesktopViewport || !accountUser) return;
+    if (!isDesktopViewport) return;
     if (siteAccountCloseTimerRef.current) {
       clearTimeout(siteAccountCloseTimerRef.current);
       siteAccountCloseTimerRef.current = null;
@@ -245,7 +237,7 @@ export function SiteHeader({ siteSettings, adminToolbar = null, accountUser = nu
   };
 
   const handleSiteAccountCloseDesktop = () => {
-    if (!isDesktopViewport || !accountUser) return;
+    if (!isDesktopViewport) return;
     if (siteAccountCloseTimerRef.current) {
       clearTimeout(siteAccountCloseTimerRef.current);
     }
@@ -256,13 +248,16 @@ export function SiteHeader({ siteSettings, adminToolbar = null, accountUser = nu
   };
 
   const handleSiteAccountToggleClick = () => {
-    if (!accountUser) return;
     setSiteAccountMenuOpen((open) => !open);
   };
 
   const logoSrc = withAssetVersion(siteSettings.logoUrl, siteSettings.brandingVersion);
   const hasLogo = siteSettings.logoUrl.trim().length > 0;
-  const accountInitial = accountUser?.displayName?.trim().charAt(0).toUpperCase() || "U";
+  const loginAccountHref = `/login?next=${encodeURIComponent("/my-account")}`;
+  const loginRegisterHref = `/login?tab=register&next=${encodeURIComponent("/my-account")}`;
+  const loginOrdersHref = `/login?next=${encodeURIComponent("/my-account?tab=orders")}`;
+  const loginProfileHref = `/login?next=${encodeURIComponent("/my-account?tab=profile")}`;
+  const accountProfileHref = "/my-account?tab=profile";
 
   function handleSearchSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -273,17 +268,7 @@ export function SiteHeader({ siteSettings, adminToolbar = null, accountUser = nu
   }
 
   return (
-    <div className="sticky top-0 z-[110]">
-      {adminToolbar ? (
-        <AdminBlackToolbar
-          username={adminToolbar.username}
-          displayName={adminToolbar.displayName}
-          avatarUrl={adminToolbar.avatarUrl}
-          profileHref={adminToolbar.profileHref}
-          quickEditHref={quickEditHref}
-        />
-      ) : null}
-
+    <div className="sticky z-[110]" style={{ top: `${Math.max(0, Math.floor(topOffsetPx))}px` }}>
       <div className="mx-auto w-[90%] max-w-[var(--site-layout-max-width)] pt-2">
         <header
           className={`rounded-2xl border transition-all duration-300 ${
@@ -309,16 +294,22 @@ export function SiteHeader({ siteSettings, adminToolbar = null, accountUser = nu
 
             <nav className="hidden flex-1 items-center justify-center gap-8 md:flex">
               {menuItems.map((item) => {
-                const isActive = pathname === item.href;
+                const isActive = isMenuItemActive(pathname, item.href);
                 return (
                   <Link
                     key={item.label}
                     href={item.href}
-                    className={`text-sm font-semibold transition ${
-                      isActive ? "text-slate-900" : "text-slate-700 hover:text-slate-900"
+                    className={`group relative px-1 pb-1 text-sm font-semibold transition-colors duration-150 ${
+                      isActive ? "text-[var(--site-color-primary)]" : "text-slate-700 hover:text-[var(--site-color-primary)]"
                     }`}
                   >
                     {item.label}
+                    <span
+                      aria-hidden
+                      className={`absolute inset-x-0 -bottom-[2px] h-0.5 rounded-full bg-[var(--site-color-primary)] transition-transform duration-200 ${
+                        isActive ? "scale-x-100" : "scale-x-0 group-hover:scale-x-100"
+                      }`}
+                    />
                   </Link>
                 );
               })}
@@ -326,11 +317,12 @@ export function SiteHeader({ siteSettings, adminToolbar = null, accountUser = nu
 
             <div className="flex items-center gap-2">
               <button
+                ref={searchToggleRef}
                 type="button"
                 aria-label="Search"
                 aria-expanded={searchOpen}
                 onClick={() => setSearchOpen((open) => !open)}
-                className="rounded-lg border border-slate-200 bg-white p-2 text-slate-700 transition hover:bg-slate-100"
+                className="inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-full bg-slate-100 text-slate-700 transition hover:bg-slate-200"
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -338,7 +330,7 @@ export function SiteHeader({ siteSettings, adminToolbar = null, accountUser = nu
                   fill="none"
                   stroke="currentColor"
                   strokeWidth="2"
-                  className="h-4 w-4"
+                  className="h-5 w-5"
                 >
                   {searchOpen ? (
                     <path d="M6 6l12 12M18 6L6 18" />
@@ -350,69 +342,136 @@ export function SiteHeader({ siteSettings, adminToolbar = null, accountUser = nu
                   )}
                 </svg>
               </button>
-              {accountUser ? (
-                <div
-                  ref={siteAccountRootRef}
-                  className="relative"
-                  onMouseEnter={handleSiteAccountOpenDesktop}
-                  onMouseLeave={handleSiteAccountCloseDesktop}
-                >
+              <div
+                ref={siteAccountRootRef}
+                className="relative"
+                onMouseEnter={handleSiteAccountOpenDesktop}
+                onMouseLeave={handleSiteAccountCloseDesktop}
+              >
+                {accountUser ? (
+                  <Link
+                    href={accountProfileHref}
+                    aria-label="Edit profile"
+                    aria-haspopup="menu"
+                    aria-expanded={siteAccountMenuOpen}
+                    className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-700 transition duration-150 hover:bg-slate-200"
+                  >
+                    {accountUser.avatarUrl ? (
+                      <img src={accountUser.avatarUrl} alt={`${accountUser.username} avatar`} className="h-10 w-10 rounded-full object-cover" />
+                    ) : (
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        className="h-5 w-5"
+                        aria-hidden
+                      >
+                        <circle cx="12" cy="8" r="3.5" />
+                        <path d="M5 19a7 7 0 0 1 14 0" />
+                      </svg>
+                    )}
+                  </Link>
+                ) : (
                   <button
                     type="button"
                     aria-label="Account menu"
                     aria-haspopup="menu"
                     aria-expanded={siteAccountMenuOpen}
                     onClick={handleSiteAccountToggleClick}
-                    className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-100"
+                    className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-700 transition duration-150 hover:bg-slate-200"
                   >
-                    <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-[11px] font-semibold text-slate-700">
-                      {accountUser.avatarUrl ? (
-                        <img src={accountUser.avatarUrl} alt={`${accountUser.username} avatar`} className="h-full w-full rounded-full object-cover" />
-                      ) : (
-                        accountInitial
-                      )}
-                    </span>
-                  </button>
-
-                  <div
-                    className={`absolute right-0 top-[calc(100%+8px)] z-[190] w-40 rounded-xl border border-slate-200 bg-white p-1.5 text-slate-800 shadow-xl transition ${
-                      siteAccountMenuOpen ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"
-                    }`}
-                  >
-                    <Link
-                      href="/my-account"
-                      onClick={() => setSiteAccountMenuOpen(false)}
-                      className="block rounded-md px-2.5 py-2 text-xs font-semibold transition hover:bg-slate-100"
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      className="h-5 w-5"
+                      aria-hidden
                     >
-                      My Account
-                    </Link>
-                    <form action={logoutAdminAction}>
-                      <button
-                        type="submit"
-                        onClick={() => setSiteAccountMenuOpen(false)}
-                        className="block w-full rounded-md px-2.5 py-2 text-left text-xs font-semibold transition hover:bg-slate-100"
-                      >
-                        Log out
-                      </button>
-                    </form>
-                  </div>
-                </div>
-              ) : (
-                <Link
-                  href="/login?next=/my-account"
-                  aria-label="My Account"
-                  title="My Account"
-                  className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-100"
+                      <circle cx="12" cy="8" r="3.5" />
+                      <path d="M5 19a7 7 0 0 1 14 0" />
+                    </svg>
+                  </button>
+                )}
+
+                <div
+                  className={`absolute right-0 top-[calc(100%+8px)] z-[190] rounded-2xl border border-slate-200 text-slate-800 shadow-xl transition ${
+                    accountUser ? "w-52 bg-white p-2" : "w-[270px] bg-[#efefef] p-3"
+                  } ${
+                    siteAccountMenuOpen ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"
+                  }`}
                 >
-                  <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-[11px] font-semibold text-slate-700">
-                    {accountInitial}
-                  </span>
-                </Link>
-              )}
+                  {accountUser ? (
+                    <>
+                      <Link
+                        href={accountProfileHref}
+                        onClick={() => setSiteAccountMenuOpen(false)}
+                        className="block rounded-lg px-3 py-2.5 text-sm font-semibold transition duration-150 hover:translate-x-0.5 hover:bg-slate-100"
+                      >
+                        Edit Profile
+                      </Link>
+                      <form action={logoutAdminAction}>
+                        <button
+                          type="submit"
+                          onClick={() => setSiteAccountMenuOpen(false)}
+                          className="block w-full cursor-pointer rounded-lg px-3 py-2.5 text-left text-sm font-semibold transition duration-150 hover:translate-x-0.5 hover:bg-slate-100"
+                        >
+                          Log out
+                        </button>
+                      </form>
+                    </>
+                  ) : (
+                    <>
+                      <p className="px-0.5 text-3xl font-semibold leading-none text-slate-900">Account</p>
+                      <Link
+                        href={loginAccountHref}
+                        onClick={() => setSiteAccountMenuOpen(false)}
+                        className="mt-3 block rounded-xl bg-gradient-to-r from-[#6743ef] to-[#4f46e5] px-4 py-2.5 text-center text-base font-semibold leading-none text-white transition hover:opacity-95"
+                      >
+                        Sign in with shop
+                      </Link>
+                      <Link
+                        href={loginRegisterHref}
+                        onClick={() => setSiteAccountMenuOpen(false)}
+                        className="mt-2 block rounded-xl bg-gradient-to-r from-[#3d5af1] to-[#3756ec] px-4 py-2.5 text-center text-base font-semibold leading-none text-white transition hover:opacity-95"
+                      >
+                        Other Sign In Options
+                      </Link>
+                      <div className="mt-3 grid grid-cols-2 gap-2">
+                        <Link
+                          href={loginOrdersHref}
+                          onClick={() => setSiteAccountMenuOpen(false)}
+                          className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#3756ec] bg-white px-3 py-2 text-sm font-semibold leading-none text-[#3756ec] transition hover:bg-indigo-50"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+                            <rect x="4" y="3" width="16" height="18" rx="2" />
+                            <path d="M8 7h8M8 11h8M8 15h5" />
+                          </svg>
+                          Orders
+                        </Link>
+                        <Link
+                          href={loginProfileHref}
+                          onClick={() => setSiteAccountMenuOpen(false)}
+                          className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#3756ec] bg-white px-3 py-2 text-sm font-semibold leading-none text-[#3756ec] transition hover:bg-indigo-50"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+                            <circle cx="12" cy="8" r="3.5" />
+                            <path d="M5 19a7 7 0 0 1 14 0" />
+                          </svg>
+                          Profile
+                        </Link>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
               <Link
                 href="/cart"
                 aria-label="Cart"
-                className="relative rounded-lg border border-slate-200 bg-white p-2 text-slate-700 transition hover:bg-slate-100"
+                className="relative inline-flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-700 transition hover:bg-slate-200"
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -420,7 +479,7 @@ export function SiteHeader({ siteSettings, adminToolbar = null, accountUser = nu
                   fill="none"
                   stroke="currentColor"
                   strokeWidth="2"
-                  className="h-4 w-4"
+                  className="h-5 w-5"
                 >
                   <circle cx="9" cy="20" r="1.5" />
                   <circle cx="17" cy="20" r="1.5" />
@@ -458,6 +517,7 @@ export function SiteHeader({ siteSettings, adminToolbar = null, accountUser = nu
           </div>
 
           <div
+            ref={searchPanelRef}
             className={`grid transition-all duration-300 ${
               searchOpen ? "grid-rows-[1fr] border-t border-slate-200" : "grid-rows-[0fr]"
             }`}
@@ -536,7 +596,7 @@ export function SiteHeader({ siteSettings, adminToolbar = null, accountUser = nu
             <div className="overflow-hidden">
               <div className="flex flex-col gap-1 p-3">
                 {menuItems.map((item) => {
-                  const isActive = pathname === item.href;
+                  const isActive = isMenuItemActive(pathname, item.href);
                   return (
                     <Link
                       key={`mobile-${item.label}`}
@@ -544,8 +604,8 @@ export function SiteHeader({ siteSettings, adminToolbar = null, accountUser = nu
                       onClick={() => setMobileMenuOpen(false)}
                       className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${
                         isActive
-                          ? "bg-slate-100 text-slate-900"
-                          : "text-slate-700 hover:bg-slate-100"
+                          ? "bg-slate-100 text-[var(--site-color-primary)]"
+                          : "text-slate-700 hover:bg-slate-100 hover:text-[var(--site-color-primary)]"
                       }`}
                     >
                       {item.label}

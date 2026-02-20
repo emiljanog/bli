@@ -1,8 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { logoutAdminAction } from "@/app/dashboard/actions";
+import { AdminNotificationsMenu, type AdminNotificationItem } from "@/components/admin-notifications-menu";
+import { AdminThemeToggle } from "@/components/admin-theme-toggle";
+import {
+  canAccessSettings,
+  type AdminRole,
+  ADMIN_SIDEBAR_COOKIE_NAME,
+  ADMIN_SIDEBAR_STATE_EVENT,
+  ADMIN_SIDEBAR_TOGGLE_REQUEST_EVENT,
+} from "@/lib/admin-auth";
 
 type ToolbarLinkItem = {
   label: string;
@@ -16,6 +25,7 @@ type ToolbarDropdownProps = {
   href?: string;
   className?: string;
   icon?: ReactNode;
+  hideLabelOnMobile?: boolean;
 };
 
 type AdminBlackToolbarProps = {
@@ -23,15 +33,14 @@ type AdminBlackToolbarProps = {
   displayName: string;
   avatarUrl: string;
   profileHref: string;
+  role?: AdminRole;
   quickEditHref?: string | null;
   dashboardMode?: boolean;
   sticky?: boolean;
+  showAdminControls?: boolean;
+  initialNotifications?: AdminNotificationItem[];
+  initialUnreadCount?: number;
 };
-
-const SITE_DASHBOARD_MENU: ToolbarLinkItem[] = [
-  { label: "Settings", href: "/dashboard/settings/general" },
-  { label: "Store", href: "/dashboard/products" },
-];
 
 const DASHBOARD_DASHBOARD_MENU: ToolbarLinkItem[] = [
   {
@@ -64,7 +73,57 @@ const NEW_MENU: ToolbarLinkItem[] = [
   { label: "New Order", href: "/dashboard/orders" },
 ];
 
-function ToolbarDropdown({ label, items, href, className = "", icon = null }: ToolbarDropdownProps) {
+function getHomeDashboardMenu(role: AdminRole): ToolbarLinkItem[] {
+  const isManager = role === "Manager";
+  const items: ToolbarLinkItem[] = [{ label: "Dashboard", href: "/dashboard" }];
+
+  if (!isManager) {
+    items.push(
+      { label: "Pages", href: "/dashboard/pages" },
+      { label: "Slider", href: "/dashboard/slider" },
+      { label: "Media", href: "/dashboard/media" },
+      { label: "Tickets", href: "/dashboard/help-tickets" },
+    );
+  }
+
+  items.push(
+    { label: "Products", href: "/dashboard/products" },
+    { label: "Orders", href: "/dashboard/orders" },
+    { label: "Categories", href: "/dashboard/categories" },
+    { label: "Tags", href: "/dashboard/tags" },
+    { label: "Sales", href: "/dashboard/sales" },
+    { label: "Coupons", href: "/dashboard/coupons" },
+    { label: "Reviews", href: "/dashboard/reviews" },
+  );
+
+  if (canAccessSettings(role) && !isManager) {
+    items.push(
+      { label: "General", href: "/dashboard/settings/general" },
+      { label: "Branding", href: "/dashboard/settings/brand" },
+      { label: "Payments", href: "/dashboard/settings/payments" },
+      { label: "Shipping", href: "/dashboard/settings/shipping" },
+      { label: "Emails", href: "/dashboard/settings/emails" },
+      { label: "Menu", href: "/dashboard/settings/menu" },
+      { label: "Security", href: "/dashboard/settings/security" },
+    );
+  }
+
+  if (!isManager) {
+    items.push({ label: "Users", href: "/dashboard/users" });
+  }
+
+  return items;
+}
+
+function ToolbarDropdown({
+  label,
+  items,
+  href,
+  className = "",
+  icon = null,
+  hideLabelOnMobile = false,
+}: ToolbarDropdownProps) {
+  const rootRef = useRef<HTMLDivElement | null>(null);
   const [open, setOpen] = useState(false);
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -94,25 +153,58 @@ function ToolbarDropdown({ label, items, href, className = "", icon = null }: To
     };
   }, []);
 
+  useEffect(() => {
+    if (!open) return;
+    const handleOutside = (event: globalThis.MouseEvent | TouchEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (rootRef.current?.contains(target)) return;
+      setOpen(false);
+    };
+    document.addEventListener("mousedown", handleOutside);
+    document.addEventListener("touchstart", handleOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleOutside);
+      document.removeEventListener("touchstart", handleOutside);
+    };
+  }, [open]);
+
+  const isMobileViewport = () =>
+    typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches;
+
+  const handleTriggerClick = (event: ReactMouseEvent<HTMLAnchorElement | HTMLButtonElement>) => {
+    if (!isMobileViewport()) return;
+    event.preventDefault();
+    event.stopPropagation();
+    setOpen((prev) => !prev);
+  };
+
   return (
-    <div className={`relative ${className}`} onMouseEnter={handleOpen} onMouseLeave={handleCloseWithDelay}>
+    <div ref={rootRef} className={`relative ${className}`} onMouseEnter={handleOpen} onMouseLeave={handleCloseWithDelay}>
       {href ? (
-        <Link href={href} className="inline-flex items-center gap-1 rounded px-2 py-1 transition hover:bg-white/18 md:py-0.5">
+        <Link
+          href={href}
+          aria-label={label}
+          onClick={handleTriggerClick}
+          className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12.5px] font-semibold transition duration-150 hover:bg-[var(--admin-toolbar-hover-bg)] md:py-1"
+        >
           {icon}
-          <span>{label}</span>
+          <span className={hideLabelOnMobile ? "hidden md:inline" : ""}>{label}</span>
         </Link>
       ) : (
         <button
           type="button"
           aria-haspopup="menu"
-          className="inline-flex items-center gap-1 rounded px-2 py-1 transition hover:bg-white/18 md:py-0.5"
+          aria-label={label}
+          onClick={handleTriggerClick}
+          className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12.5px] font-semibold transition duration-150 hover:bg-[var(--admin-toolbar-hover-bg)] md:py-1"
         >
           {icon}
-          <span>{label}</span>
+          <span className={hideLabelOnMobile ? "hidden md:inline" : ""}>{label}</span>
         </button>
       )}
       <div
-        className={`absolute left-0 top-[calc(100%+6px)] z-[180] min-w-[180px] rounded-b-md border border-slate-800 bg-black p-1.5 text-white shadow-xl transition duration-150 ${
+        className={`absolute left-0 top-[calc(100%+8px)] z-[180] min-w-[210px] rounded-xl border border-[var(--admin-toolbar-menu-border)] bg-[var(--admin-toolbar-menu-bg)] p-2 text-[var(--admin-toolbar-menu-text)] shadow-xl backdrop-blur-sm transition duration-150 ${
           open ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"
         }`}
       >
@@ -120,7 +212,7 @@ function ToolbarDropdown({ label, items, href, className = "", icon = null }: To
           <Link
             key={item.href}
             href={item.href}
-            className="inline-flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-xs font-semibold transition hover:bg-white/15"
+            className="inline-flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold text-[var(--admin-toolbar-menu-text)] transition duration-150 hover:translate-x-0.5 hover:bg-[var(--admin-toolbar-menu-hover)]"
             onClick={() => setOpen(false)}
           >
             {item.icon}
@@ -137,11 +229,17 @@ export function AdminBlackToolbar({
   displayName,
   avatarUrl,
   profileHref,
+  role = "Super Admin",
   quickEditHref = null,
   dashboardMode = false,
   sticky = false,
+  showAdminControls = false,
+  initialNotifications = [],
+  initialUnreadCount = 0,
 }: AdminBlackToolbarProps) {
+  const accountRootRef = useRef<HTMLDivElement | null>(null);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const accountCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -152,7 +250,48 @@ export function AdminBlackToolbar({
     };
   }, []);
 
+  useEffect(() => {
+    if (!accountMenuOpen) return;
+    const handleOutside = (event: globalThis.MouseEvent | TouchEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (accountRootRef.current?.contains(target)) return;
+      setAccountMenuOpen(false);
+    };
+    document.addEventListener("mousedown", handleOutside);
+    document.addEventListener("touchstart", handleOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleOutside);
+      document.removeEventListener("touchstart", handleOutside);
+    };
+  }, [accountMenuOpen]);
+
+  useEffect(() => {
+    if (!dashboardMode) return;
+    const stored = window.localStorage.getItem(ADMIN_SIDEBAR_COOKIE_NAME);
+    const rafId = window.requestAnimationFrame(() => {
+      setSidebarCollapsed(stored === "1");
+    });
+
+    const handleSidebarState = (event: Event) => {
+      const detail = (event as CustomEvent<{ collapsed?: boolean }>).detail;
+      if (typeof detail?.collapsed === "boolean") {
+        setSidebarCollapsed(detail.collapsed);
+      }
+    };
+
+    window.addEventListener(ADMIN_SIDEBAR_STATE_EVENT, handleSidebarState);
+    return () => {
+      window.cancelAnimationFrame(rafId);
+      window.removeEventListener(ADMIN_SIDEBAR_STATE_EVENT, handleSidebarState);
+    };
+  }, [dashboardMode]);
+
+  const isMobileViewport = () =>
+    typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches;
+
   const handleAccountOpen = () => {
+    if (isMobileViewport()) return;
     if (accountCloseTimerRef.current) {
       clearTimeout(accountCloseTimerRef.current);
       accountCloseTimerRef.current = null;
@@ -161,6 +300,7 @@ export function AdminBlackToolbar({
   };
 
   const handleAccountCloseWithDelay = () => {
+    if (isMobileViewport()) return;
     if (accountCloseTimerRef.current) {
       clearTimeout(accountCloseTimerRef.current);
     }
@@ -170,69 +310,161 @@ export function AdminBlackToolbar({
     }, 260);
   };
 
+  const handleAccountTriggerClick = (event: ReactMouseEvent<HTMLAnchorElement>) => {
+    if (!isMobileViewport()) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (accountCloseTimerRef.current) {
+      clearTimeout(accountCloseTimerRef.current);
+      accountCloseTimerRef.current = null;
+    }
+    setAccountMenuOpen((prev) => !prev);
+  };
+
+  const handleSidebarToggle = () => {
+    if (!dashboardMode) return;
+    window.dispatchEvent(new Event(ADMIN_SIDEBAR_TOGGLE_REQUEST_EVENT));
+  };
+
   const fallbackInitial = username.trim().charAt(0).toUpperCase() || "A";
-  const dashboardMenu = dashboardMode ? DASHBOARD_DASHBOARD_MENU : SITE_DASHBOARD_MENU;
+  const safeDisplayName = displayName.trim() || username || "Admin";
+  const welcomeLabel = `Welcome, ${safeDisplayName}`;
+  const homeDashboardMenu = getHomeDashboardMenu(role);
+  const dashboardMenu = dashboardMode ? DASHBOARD_DASHBOARD_MENU : homeDashboardMenu;
+  const dashboardHref = dashboardMode ? "/" : "/dashboard";
 
   return (
-    <div className={`${sticky ? "sticky top-0 z-[260]" : ""} w-full bg-black text-white shadow-sm`}>
+    <div
+      className={`${sticky ? "sticky top-0 z-[260]" : ""} w-full border-b border-[var(--admin-toolbar-border)] bg-[var(--admin-toolbar-bg)] text-[var(--admin-toolbar-text)] shadow-sm`}
+    >
       <div className="flex min-h-[40px] w-full items-center justify-between gap-2 px-3 py-1.5 text-[12px] md:min-h-0 md:px-4 md:py-1">
         <div className="flex min-w-0 items-center gap-1.5 font-medium">
-          <ToolbarDropdown label="Dashboard" href="/dashboard" items={dashboardMenu} />
+          {dashboardMode ? (
+            <button
+              type="button"
+              onClick={handleSidebarToggle}
+              aria-label="Toggle menu"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-md transition duration-150 hover:bg-[var(--admin-toolbar-hover-bg)]"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" className="h-4.5 w-4.5 lg:hidden">
+                <path d="M4 7h16" />
+                <path d="M4 12h16" />
+                <path d="M4 17h16" />
+              </svg>
+              {sidebarCollapsed ? (
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  className="hidden h-4.5 w-4.5 lg:block"
+                >
+                  <path d="M9 6l6 6-6 6" />
+                </svg>
+              ) : (
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.3"
+                  className="hidden h-4.5 w-4.5 lg:block"
+                >
+                  <path d="M4 7h16" />
+                  <path d="M4 12h16" />
+                  <path d="M4 17h16" />
+                </svg>
+              )}
+            </button>
+          ) : null}
+
+          <ToolbarDropdown
+            label="Dashboard"
+            href={dashboardHref}
+            items={dashboardMenu}
+            hideLabelOnMobile
+            icon={(
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.7" className="h-4 w-4">
+                <rect x="2" y="2" width="7" height="8" rx="1.2" />
+                <rect x="15" y="3" width="7" height="6" rx="1.2" />
+                <rect x="2" y="14" width="7" height="6" rx="1.2" />
+                <rect x="15" y="13" width="7" height="8" rx="1.2" />
+              </svg>
+            )}
+          />
           <ToolbarDropdown
             label="New"
             items={NEW_MENU}
+            hideLabelOnMobile
             icon={(
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" className="h-4.5 w-4.5">
-                <path d="M12 5v14M5 12h14" />
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.8" strokeLinecap="round" className="h-5 w-5">
+                <path d="M12 6v12M6 12h12" />
               </svg>
             )}
           />
           {quickEditHref ? (
-            <Link href={quickEditHref} className="inline-flex items-center gap-1 rounded px-2 py-1 transition hover:bg-white/15 md:py-0.5">
+            <Link href={quickEditHref} aria-label="Edit" className="inline-flex items-center gap-1 rounded px-2 py-1 transition hover:bg-[var(--admin-toolbar-hover-bg)] md:py-0.5">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5">
                 <path d="M12 20h9" />
                 <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" />
               </svg>
-              <span>Edit</span>
+              <span className="hidden md:inline">Edit</span>
             </Link>
           ) : null}
         </div>
 
-        <div
-          className="relative shrink-0"
-          onMouseEnter={handleAccountOpen}
-          onMouseLeave={handleAccountCloseWithDelay}
-        >
-          <button type="button" className="inline-flex items-center gap-1.5 rounded px-1 py-1 text-xs font-medium transition hover:bg-white/10 md:py-0.5">
-            <span className="inline-flex h-5 w-5 items-center justify-center overflow-hidden rounded-full bg-slate-200 text-[10px] font-semibold text-slate-700">
-              {avatarUrl ? (
-                <img src={avatarUrl} alt={`${username} avatar`} className="h-full w-full object-cover" />
-              ) : (
-                fallbackInitial
-              )}
-            </span>
-            <span className="max-w-[130px] truncate">{displayName}</span>
-          </button>
+        <div className="flex shrink-0 items-center gap-1.5">
+          {showAdminControls ? <AdminThemeToggle /> : null}
+          {showAdminControls ? (
+            <AdminNotificationsMenu
+              initialNotifications={initialNotifications}
+              initialUnreadCount={initialUnreadCount}
+            />
+          ) : null}
+
           <div
-            className={`absolute right-0 top-[calc(100%+6px)] z-[190] w-44 rounded-b-md border border-slate-800 bg-black p-1.5 text-white shadow-xl transition duration-150 ${
-              accountMenuOpen ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"
-            }`}
+            ref={accountRootRef}
+            className="relative"
+            onMouseEnter={handleAccountOpen}
+            onMouseLeave={handleAccountCloseWithDelay}
           >
             <Link
               href={profileHref}
-              className="block rounded px-2 py-1.5 text-xs font-semibold transition hover:bg-white/[0.02]"
-              onClick={() => setAccountMenuOpen(false)}
+              onClick={handleAccountTriggerClick}
+              aria-haspopup="menu"
+              aria-expanded={accountMenuOpen}
+              className="inline-flex items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium transition duration-150 hover:bg-[var(--admin-toolbar-hover-bg)]"
             >
-              Edit Profile
+              <span className="inline-flex h-6 w-6 items-center justify-center overflow-hidden rounded-full bg-slate-200 text-[10px] font-semibold text-slate-700">
+                {avatarUrl ? (
+                  <img src={avatarUrl} alt={`${username} avatar`} className="h-full w-full object-cover" />
+                ) : (
+                  fallbackInitial
+                )}
+              </span>
+              <span className="hidden max-w-[240px] truncate md:inline">{welcomeLabel}</span>
             </Link>
-            <form action={logoutAdminAction}>
-              <button
-                type="submit"
-                className="block w-full rounded px-2 py-1.5 text-left text-xs font-semibold transition hover:bg-white/[0.02]"
+            <div
+              className={`absolute right-0 top-[calc(100%+8px)] z-[190] w-52 rounded-xl border border-[var(--admin-toolbar-menu-border)] bg-[var(--admin-toolbar-menu-bg)] p-2 text-[var(--admin-toolbar-menu-text)] shadow-xl backdrop-blur-sm transition duration-150 ${
+                accountMenuOpen ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"
+              }`}
+            >
+              <Link
+                href={profileHref}
+                className="block rounded-md px-3 py-2 text-sm font-semibold transition duration-150 hover:translate-x-0.5 hover:bg-[var(--admin-toolbar-menu-hover)]"
+                onClick={() => setAccountMenuOpen(false)}
               >
-                Log out
-              </button>
-            </form>
+                Edit Profile
+              </Link>
+              <form action={logoutAdminAction}>
+                <button
+                  type="submit"
+                  onClick={() => setAccountMenuOpen(false)}
+                  className="block w-full cursor-pointer rounded-md px-3 py-2 text-left text-sm font-semibold transition duration-150 hover:translate-x-0.5 hover:bg-[var(--admin-toolbar-menu-hover)]"
+                >
+                  Log out
+                </button>
+              </form>
+            </div>
           </div>
         </div>
       </div>

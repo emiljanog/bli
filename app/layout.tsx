@@ -6,11 +6,15 @@ import { AppShell } from "@/components/app-shell";
 import {
   ADMIN_COOKIE_NAME,
   ADMIN_SESSION_VALUE,
-  canAccessAdmin,
   getAdminRoleFromCookieStore,
   getAdminUsernameFromCookieStore,
 } from "@/lib/admin-auth";
-import { findUserByUsername, getSiteSettings } from "@/lib/shop-store";
+import {
+  countUnreadAdminNotifications,
+  findUserByUsername,
+  getSiteSettings,
+  listAdminNotifications,
+} from "@/lib/shop-store";
 import "./globals.css";
 
 export const dynamic = "force-dynamic";
@@ -85,6 +89,14 @@ export default async function RootLayout({
   const adminRole = getAdminRoleFromCookieStore(cookieStore);
   const adminUsername = getAdminUsernameFromCookieStore(cookieStore);
   const adminUser = findUserByUsername(adminUsername);
+  const effectiveToolbarRole = adminUser?.role ?? adminRole;
+  const isToolbarRole =
+    effectiveToolbarRole === "Super Admin" ||
+    effectiveToolbarRole === "Admin" ||
+    effectiveToolbarRole === "Manager";
+  const shouldShowToolbar = isLoggedIn && isToolbarRole && (adminUser?.showToolbar ?? true);
+  const adminNotifications = shouldShowToolbar ? listAdminNotifications(14) : [];
+  const adminUnreadNotifications = shouldShowToolbar ? countUnreadAdminNotifications() : 0;
   const accountUser =
     isLoggedIn
       ? {
@@ -94,12 +106,14 @@ export default async function RootLayout({
         }
       : null;
   const adminToolbar =
-    isLoggedIn && canAccessAdmin(adminRole)
+    shouldShowToolbar
       ? {
           username: adminUsername,
           displayName: adminUser?.name || adminUsername,
           avatarUrl: adminUser?.avatarUrl || "",
           profileHref: adminUser ? `/dashboard/users/${adminUser.id}` : "/dashboard/users",
+          initialNotifications: adminNotifications,
+          initialUnreadCount: adminUnreadNotifications,
         }
       : null;
   const styleVars: Record<string, string> = {

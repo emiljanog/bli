@@ -1,5 +1,7 @@
 export const ADMIN_COOKIE_NAME = "bli_admin_session";
 export const ADMIN_SIDEBAR_COOKIE_NAME = "bli_admin_sidebar_collapsed";
+export const ADMIN_SIDEBAR_TOGGLE_REQUEST_EVENT = "bli-admin-sidebar-toggle-request";
+export const ADMIN_SIDEBAR_STATE_EVENT = "bli-admin-sidebar-state";
 export const ADMIN_ROLE_COOKIE_NAME = "bli_admin_role";
 export const ADMIN_USERNAME_COOKIE_NAME = "bli_admin_username";
 

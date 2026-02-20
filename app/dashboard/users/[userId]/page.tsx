@@ -115,6 +115,24 @@ export default async function AdminUserEditPage({ params }: AdminUserEditPagePro
                 ))}
               </select>
             </div>
+            <div className="md:col-span-2">
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Toolbar
+              </label>
+              <label className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700">
+                <input
+                  name="showToolbar"
+                  type="checkbox"
+                  defaultChecked={user.showToolbar !== false}
+                  disabled={isSuperAdminLocked}
+                  className="h-4 w-4 rounded border-slate-300"
+                />
+                <span>Show Toolbar</span>
+              </label>
+              <p className="mt-1 text-xs text-slate-500">
+                Applies only to `Manager`, `Admin`, and `Super Admin` roles.
+              </p>
+            </div>
             <div>
               <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Email

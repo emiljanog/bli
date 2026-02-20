@@ -9,11 +9,6 @@ type AdminThemeToggleProps = {
 
 const THEME_STORAGE_KEY = "bli-theme-mode";
 
-function getSystemTheme(): "light" | "dark" {
-  if (typeof window === "undefined") return "light";
-  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-}
-
 function applyTheme(mode: ThemeMode) {
   if (typeof document === "undefined") return;
   const root = document.documentElement;
@@ -27,31 +22,37 @@ function applyTheme(mode: ThemeMode) {
 export function AdminThemeToggle({ size = "default" }: AdminThemeToggleProps) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const [open, setOpen] = useState(false);
-  const [mode, setMode] = useState<ThemeMode>(() => {
-    if (typeof window === "undefined") return "system";
-    const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
-    if (stored === "light" || stored === "dark" || stored === "system") {
-      return stored;
-    }
-    return "system";
-  });
-  const [systemTheme, setSystemTheme] = useState<"light" | "dark">(() => getSystemTheme());
+  const [mode, setMode] = useState<ThemeMode>("system");
+  const [systemTheme, setSystemTheme] = useState<"light" | "dark">("light");
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+    const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
+    const storedMode: ThemeMode = stored === "light" || stored === "dark" || stored === "system" ? stored : "system";
+    applyTheme(storedMode);
+
     const media = window.matchMedia("(prefers-color-scheme: dark)");
     const handleChange = () => {
       setSystemTheme(media.matches ? "dark" : "light");
     };
     media.addEventListener("change", handleChange);
-    return () => media.removeEventListener("change", handleChange);
+    const rafId = window.requestAnimationFrame(() => {
+      setMode(storedMode);
+      setSystemTheme(media.matches ? "dark" : "light");
+      setReady(true);
+    });
+    return () => {
+      window.cancelAnimationFrame(rafId);
+      media.removeEventListener("change", handleChange);
+    };
   }, []);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    if (typeof window === "undefined" || !ready) return;
     window.localStorage.setItem(THEME_STORAGE_KEY, mode);
     applyTheme(mode);
-  }, [mode]);
+  }, [mode, ready]);
 
   useEffect(() => {
     if (!open) return;

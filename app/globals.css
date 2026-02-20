@@ -20,6 +20,14 @@
   --admin-text: #0f172a;
   --admin-muted: #64748b;
   --admin-hover-bg: #e2e8f0;
+  --admin-toolbar-bg: #ffffff;
+  --admin-toolbar-text: #0f172a;
+  --admin-toolbar-border: #e2e8f0;
+  --admin-toolbar-hover-bg: #e2e8f0;
+  --admin-toolbar-menu-bg: #ffffff;
+  --admin-toolbar-menu-text: #0f172a;
+  --admin-toolbar-menu-border: #cbd5e1;
+  --admin-toolbar-menu-hover: #e2e8f0;
 }
 
 @theme inline {
@@ -41,6 +49,14 @@
     --admin-text: #e2e8f0;
     --admin-muted: #94a3b8;
     --admin-hover-bg: #1f2937;
+    --admin-toolbar-bg: #000000;
+    --admin-toolbar-text: #f8fafc;
+    --admin-toolbar-border: #334155;
+    --admin-toolbar-hover-bg: rgba(255, 255, 255, 0.16);
+    --admin-toolbar-menu-bg: #020617;
+    --admin-toolbar-menu-text: #f8fafc;
+    --admin-toolbar-menu-border: #334155;
+    --admin-toolbar-menu-hover: rgba(255, 255, 255, 0.16);
   }
 }
 
@@ -55,6 +71,14 @@
   --admin-text: #e2e8f0;
   --admin-muted: #94a3b8;
   --admin-hover-bg: #1f2937;
+  --admin-toolbar-bg: #000000;
+  --admin-toolbar-text: #f8fafc;
+  --admin-toolbar-border: #334155;
+  --admin-toolbar-hover-bg: rgba(255, 255, 255, 0.16);
+  --admin-toolbar-menu-bg: #020617;
+  --admin-toolbar-menu-text: #f8fafc;
+  --admin-toolbar-menu-border: #334155;
+  --admin-toolbar-menu-hover: rgba(255, 255, 255, 0.16);
 }
 
 :root[data-theme="light"] {
@@ -68,6 +92,14 @@
   --admin-text: #0f172a;
   --admin-muted: #64748b;
   --admin-hover-bg: #e2e8f0;
+  --admin-toolbar-bg: #ffffff;
+  --admin-toolbar-text: #0f172a;
+  --admin-toolbar-border: #e2e8f0;
+  --admin-toolbar-hover-bg: #e2e8f0;
+  --admin-toolbar-menu-bg: #ffffff;
+  --admin-toolbar-menu-text: #0f172a;
+  --admin-toolbar-menu-border: #cbd5e1;
+  --admin-toolbar-menu-hover: #e2e8f0;
 }
 
 body {

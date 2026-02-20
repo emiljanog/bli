@@ -1831,6 +1831,7 @@ export async function updateUserAction(formData: FormData) {
   const phone = asString(formData.get("phone"));
   const city = asString(formData.get("city"));
   const address = asString(formData.get("address"));
+  const showToolbar = asBoolean(formData.get("showToolbar"));
   const redirectTo = asLastString(formData.getAll("redirectTo"));
 
   if (!userId || !name || !email || !role) return;
@@ -1851,6 +1852,7 @@ export async function updateUserAction(formData: FormData) {
     phone,
     city,
     address,
+    showToolbar,
   });
 
   revalidateAdminPath("/admin");
