@@ -104,9 +104,9 @@ export function AppShell({ children, siteSettings, adminToolbar = null, accountU
           <ActionFeedbackToast />
         </Suspense>
         <div className="border-b border-slate-200 bg-white">
-          <div className="site-container">
-            <div className="grid grid-cols-2 items-center py-4">
-              <div>
+          <div className="site-container grid grid-cols-2 lg:grid-cols-2">
+            <div className="px-4 py-4 sm:px-6 md:px-10">
+              <div className="w-full max-w-[640px]">
                 <Link href="/" className="flex items-center gap-2">
                   {hasLogo ? (
                     <img
@@ -121,15 +121,17 @@ export function AppShell({ children, siteSettings, adminToolbar = null, accountU
                   )}
                 </Link>
               </div>
-              <div className="flex justify-end">
+            </div>
+            <div className="flex justify-end px-4 py-4 sm:px-6 md:px-10">
+              <div>
                 <Link
                   href="/cart"
                   aria-label="Cart"
-                  className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-100"
+                  className="relative inline-flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-700 transition hover:bg-slate-200"
                 >
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
-                    <rect x="3" y="5" width="18" height="14" rx="2" />
-                    <path d="M3 10h18" />
+                    <path d="M6.5 8h11l-1 11.5a1 1 0 0 1-1 .9h-7a1 1 0 0 1-1-.9L6.5 8z" />
+                    <path d="M9 8V6.5a3 3 0 0 1 6 0V8" />
                   </svg>
                 </Link>
               </div>
@@ -137,14 +139,9 @@ export function AppShell({ children, siteSettings, adminToolbar = null, accountU
           </div>
         </div>
         {children}
-        <footer className="bg-white lg:bg-[linear-gradient(to_right,#ffffff_50%,#f5f5f5_50%)]">
-          <div className="site-container grid lg:grid-cols-2">
-            <div className="py-4">
-              <div className="w-full max-w-[640px] border-t border-slate-200 pt-4 text-center text-sm text-slate-600">
-                {siteSettings.siteTitle} Copyright (c) {year}
-              </div>
-            </div>
-            <div className="hidden lg:block" aria-hidden />
+        <footer className="border-t border-slate-200 bg-white">
+          <div className="site-container py-4 text-center text-sm text-slate-600">
+            Copyright (c) {year} {siteSettings.siteTitle}
           </div>
         </footer>
       </>

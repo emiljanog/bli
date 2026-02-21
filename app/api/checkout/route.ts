@@ -20,6 +20,14 @@ type CheckoutItem = {
   quantity: number;
 };
 
+type PreparedOrderItem = {
+  productId: string;
+  quantity: number;
+  unitPrice: number;
+  discount: number;
+  total: number;
+};
+
 type ShippingMethodCode = "standard" | "express";
 type PaymentMethodCode = "cad" | "bank_transfer" | "stripe_demo";
 
@@ -165,6 +173,7 @@ export async function POST(request: Request) {
     const zipInput = asString(body.zip);
     const countryInput = asString(body.country);
     const couponCode = asString(body.couponCode);
+    const orderNote = asString(body.orderNote);
     const shippingMethodInput = asString(body.shippingMethod);
     const paymentMethodInput = asString(body.paymentMethod);
     const createAccount = asBoolean(body.createAccount);
@@ -259,6 +268,7 @@ export async function POST(request: Request) {
         : selectedShippingMethod.price;
     const total = Math.max(0, Number((subtotal - discount + shippingCost).toFixed(2)));
 
+    const preparedItems: PreparedOrderItem[] = [];
     let allocatedDiscount = 0;
     for (let index = 0; index < items.length; index += 1) {
       const item = items[index];
@@ -285,17 +295,25 @@ export async function POST(request: Request) {
       allocatedDiscount += itemDiscount;
       const itemTotal = Math.max(0, Number((itemSubtotal - itemDiscount).toFixed(2)));
 
-      addOrder({
-        customer: `${customerName}${state || zip ? ` (${state || "State"} ${zip || ""})` : ""}`.trim(),
-        userId: orderUserId,
+      preparedItems.push({
         productId,
         quantity: item.quantity,
-        total: itemTotal,
+        unitPrice: item.price,
         discount: itemDiscount,
-        couponCode: couponResult.coupon?.code ?? null,
-        status: "Paid",
+        total: itemTotal,
       });
     }
+
+    const createdOrder = addOrder({
+      customer: `${customerName}${state || zip ? ` (${state || "State"} ${zip || ""})` : ""}`.trim(),
+      userId: orderUserId,
+      items: preparedItems,
+      total,
+      discount,
+      couponCode: couponResult.coupon?.code ?? null,
+      note: orderNote,
+      status: "Paid",
+    });
 
     addSale({
       source: "Website Checkout",
@@ -314,7 +332,8 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       success: true,
-      orderCount: items.length,
+      orderCount: 1,
+      orderId: createdOrder.id,
       subtotal,
       shippingCost,
       discount,

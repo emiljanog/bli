@@ -3,7 +3,6 @@ import { AddToCartButton } from "@/components/add-to-cart-button";
 import { HomeHero } from "@/components/home-hero";
 import {
   getEffectiveProductPricing,
-  getReviewSummary,
   getSiteSettings,
   listProductCategories,
   listProducts,
@@ -191,7 +190,6 @@ export default function Home() {
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
             {featuredProducts.map((product) => (
               (() => {
-                const reviewSummary = getReviewSummary(product.id);
                 const pricing = getEffectiveProductPricing(product);
                 return (
                   <article
@@ -210,24 +208,12 @@ export default function Home() {
                         {product.name}
                       </Link>
                     </h4>
-                    <p className="mt-1 text-xs text-slate-500">Stock: {product.stock}</p>
-                    <p className="mt-1 text-xs text-amber-700">
-                      {reviewSummary.count > 0
-                        ? `${reviewSummary.average}/5 (${reviewSummary.count} reviews)`
-                        : "No reviews yet"}
-                    </p>
                     <div className="mt-2 flex items-center gap-2">
                       <span className="text-lg font-bold text-slate-900">{formatCurrency(pricing.current)}</span>
                       {pricing.onSale ? (
                         <span className="text-sm text-slate-500 line-through">{formatCurrency(pricing.regular)}</span>
                       ) : null}
                     </div>
-                    <Link
-                      href={`/product/${product.slug}`}
-                      className="mt-2 inline-block text-sm font-semibold text-slate-700 underline-offset-4 transition hover:text-slate-900 hover:underline"
-                    >
-                      Shiko detajet
-                    </Link>
                     <AddToCartButton
                       productId={product.id}
                       name={product.name}

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { clearCart, type CartItem, readCart, subscribeCartUpdates } from "@/lib/cart";
 
 type CheckoutSuccess = {
@@ -24,8 +24,6 @@ type CheckoutFields = {
   address: string;
   addressLine2: string;
   city: string;
-  state: string;
-  zip: string;
   couponCode: string;
   password: string;
 };
@@ -100,6 +98,8 @@ function formatCurrency(amount: number): string {
   }).format(amount);
 }
 
+const CHECKOUT_ORDER_NOTE_KEY = "bli-order-note";
+
 export default function CheckoutPage() {
   const [items, setItems] = useState<CartItem[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -107,13 +107,14 @@ export default function CheckoutPage() {
   const [success, setSuccess] = useState<CheckoutSuccess | null>(null);
   const [createAccount, setCreateAccount] = useState(false);
   const [emailMarketing, setEmailMarketing] = useState(true);
-  const [saveForNextTime, setSaveForNextTime] = useState(false);
+  const [showOtherCountryPicker, setShowOtherCountryPicker] = useState(false);
   const [useShippingAsBilling, setUseShippingAsBilling] = useState(true);
   const [isAuthenticatedUser, setIsAuthenticatedUser] = useState(false);
   const [options, setOptions] = useState<CheckoutOptions>(FALLBACK_OPTIONS);
   const [selectedShippingMethod, setSelectedShippingMethod] = useState<string>(FALLBACK_OPTIONS.shipping.methods[0]?.code ?? "");
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>(FALLBACK_OPTIONS.payments.methods[0]?.code ?? "");
   const [couponDraft, setCouponDraft] = useState("");
+  const [orderNote, setOrderNote] = useState("");
   const [mobileCouponOpen, setMobileCouponOpen] = useState(false);
   const [mobileItemsExpanded, setMobileItemsExpanded] = useState(false);
   const [fields, setFields] = useState<CheckoutFields>({
@@ -121,12 +122,10 @@ export default function CheckoutPage() {
     lastName: "",
     email: "",
     phone: "",
-    country: "United States",
+    country: "Shqiperi",
     address: "",
     addressLine2: "",
     city: "",
-    state: "",
-    zip: "",
     couponCode: "",
     password: "",
   });
@@ -157,6 +156,22 @@ export default function CheckoutPage() {
       setMobileItemsExpanded(false);
     }
   }, [items.length, mobileItemsExpanded]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const fromStorage = window.localStorage.getItem(CHECKOUT_ORDER_NOTE_KEY) || "";
+    if (!fromStorage) return;
+    setOrderNote(fromStorage);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!orderNote.trim()) {
+      window.localStorage.removeItem(CHECKOUT_ORDER_NOTE_KEY);
+      return;
+    }
+    window.localStorage.setItem(CHECKOUT_ORDER_NOTE_KEY, orderNote);
+  }, [orderNote]);
 
   useEffect(() => {
     let canceled = false;
@@ -231,6 +246,11 @@ export default function CheckoutPage() {
     }
   }, [options.payments.methods, selectedPaymentMethod]);
 
+  useEffect(() => {
+    if (!success || typeof window === "undefined") return;
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }, [success]);
+
   const updateField = (field: keyof CheckoutFields, value: string) => {
     setFields((prev) => ({ ...prev, [field]: value }));
   };
@@ -240,7 +260,7 @@ export default function CheckoutPage() {
     [items],
   );
 
-  const hasDeliveryAddress = Boolean(fields.address.trim() && fields.city.trim() && fields.state.trim() && fields.zip.trim() && fields.country.trim());
+  const hasDeliveryAddress = Boolean(fields.address.trim() && fields.city.trim() && fields.country.trim());
 
   const selectedShipping = useMemo(
     () => options.shipping.methods.find((method) => method.code === selectedShippingMethod) ?? null,
@@ -289,25 +309,28 @@ export default function CheckoutPage() {
     setFields((prev) => ({ ...prev, couponCode: normalized }));
   };
 
-  const handleSubmit = async (_formData: FormData) => {
-    void _formData;
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
     if (items.length === 0) {
-      setError("Cart is empty.");
+      setError("Shporta eshte bosh.");
       return;
     }
 
     if (!selectedShippingMethod) {
-      setError("Please choose a shipping method.");
+      setError("Zgjidh nje menyre dergese.");
       return;
     }
 
     if (!selectedPaymentMethod) {
-      setError("Please choose a payment method.");
+      setError("Zgjidh nje menyre pagese.");
       return;
     }
 
     setIsSubmitting(true);
     setError("");
+    const feedbackDelay = new Promise<void>((resolve) => {
+      setTimeout(resolve, 1000);
+    });
 
     const customerName = `${fields.firstName.trim()} ${fields.lastName.trim()}`.trim();
     const fullAddress = `${fields.address.trim()}${fields.addressLine2.trim() ? `, ${fields.addressLine2.trim()}` : ""}`;
@@ -318,12 +341,11 @@ export default function CheckoutPage() {
       phone: fields.phone.trim(),
       address: fullAddress,
       city: fields.city.trim(),
-      state: fields.state.trim(),
-      zip: fields.zip.trim(),
       country: fields.country.trim(),
       shippingMethod: selectedShippingMethod,
       paymentMethod: selectedPaymentMethod,
       couponCode: fields.couponCode.trim(),
+      orderNote: orderNote.trim(),
       createAccount: !isAuthenticatedUser && createAccount,
       password: fields.password.trim(),
       items,
@@ -346,16 +368,22 @@ export default function CheckoutPage() {
         discount?: number;
         total?: number;
         couponCode?: string | null;
+        orderId?: string;
         shippingMethod?: string;
         paymentMethod?: string;
       };
 
+      await feedbackDelay;
+
       if (!response.ok) {
-        setError(data.error ?? "Checkout failed. Try again.");
+        setError(data.error ?? "Checkout deshtoi. Provo perseri.");
         return;
       }
 
       await clearCart();
+      if (typeof window !== "undefined") {
+        window.localStorage.removeItem(CHECKOUT_ORDER_NOTE_KEY);
+      }
       setSuccess({
         orderCount: data.orderCount ?? payload.items.length,
         subtotal: data.subtotal ?? subtotal,
@@ -367,7 +395,8 @@ export default function CheckoutPage() {
         paymentMethod: data.paymentMethod ?? selectedPaymentMethod,
       });
     } catch {
-      setError("Server is unreachable. Try again.");
+      await feedbackDelay;
+      setError("Serveri nuk pergjigjet. Provo perseri.");
     } finally {
       setIsSubmitting(false);
     }
@@ -375,31 +404,31 @@ export default function CheckoutPage() {
 
   if (success) {
     return (
-      <main className="bg-[#f7f7f7] text-slate-900">
-        <section className="mx-auto w-[92%] max-w-[900px] py-10 md:py-14">
-          <article className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
-            <p className="text-sm font-semibold text-emerald-700">Payment complete</p>
-            <h1 className="mt-2 text-3xl font-bold">Order placed successfully</h1>
-            <p className="mt-3 text-sm text-slate-600">Created orders: {success.orderCount}</p>
+      <main className="min-h-screen overflow-x-clip bg-white text-slate-900">
+        <section className="site-container px-4 py-6 sm:px-6 sm:py-8 md:px-10 md:py-10">
+          <article className="w-full rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
+            <p className="text-sm font-semibold text-emerald-700">Pagesa u krye</p>
+            <h1 className="mt-2 text-3xl font-bold">Porosia u krijua me sukses</h1>
+            <p className="mt-3 text-sm text-slate-600">Porosite e krijuara: {success.orderCount}</p>
             <div className="mt-5 space-y-1 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
-              <p>Subtotal: <span className="font-semibold">{formatCurrency(success.subtotal)}</span></p>
-              <p>Shipping: <span className="font-semibold">{formatCurrency(success.shippingCost)}</span></p>
-              <p>Discount: <span className="font-semibold">- {formatCurrency(success.discount)}</span></p>
+              <p>Nentotali: <span className="font-semibold">{formatCurrency(success.subtotal)}</span></p>
+              <p>Transporti: <span className="font-semibold">{formatCurrency(success.shippingCost)}</span></p>
+              <p>Zbritja: <span className="font-semibold">- {formatCurrency(success.discount)}</span></p>
               <p>Total: <span className="font-semibold">{formatCurrency(success.total)}</span></p>
-              {success.couponCode ? <p>Coupon: <span className="font-semibold">{success.couponCode}</span></p> : null}
+              {success.couponCode ? <p>Kuponi: <span className="font-semibold">{success.couponCode}</span></p> : null}
             </div>
             <div className="mt-6 flex flex-wrap gap-3">
               <Link
                 href="/shop"
                 className="rounded-xl bg-[#1565d8] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#0f56bf]"
               >
-                Continue shopping
+                Vazhdo blerjet
               </Link>
               <Link
                 href={isAuthenticatedUser ? "/my-account?tab=orders" : "/dashboard/orders"}
                 className="rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
               >
-                View orders
+                Shiko porosite
               </Link>
             </div>
           </article>
@@ -411,7 +440,7 @@ export default function CheckoutPage() {
   return (
     <main className="min-h-screen overflow-x-clip bg-white text-slate-900 lg:bg-[linear-gradient(to_right,#ffffff_50%,#f5f5f5_50%)]">
       <section className="site-container grid lg:min-h-screen lg:grid-cols-2 lg:items-start">
-        <form id="checkout-form" action={handleSubmit} className="min-w-0 bg-white px-4 py-6 sm:px-6 sm:py-8 md:px-10 md:py-10">
+        <form id="checkout-form" onSubmit={handleSubmit} className="min-w-0 bg-white px-4 py-6 sm:px-6 sm:py-8 md:px-10 md:py-10">
           <div className="w-full max-w-[640px] space-y-8">
             <section>
               <div className="mb-3 flex items-center justify-between">
@@ -446,20 +475,49 @@ export default function CheckoutPage() {
             <section>
               <h2 className="mb-3 text-[18px] font-semibold leading-none">Delivery</h2>
               <div className="space-y-3">
-                <div className="relative">
-                  <span className="pointer-events-none absolute left-4 top-2 text-xs text-slate-500">Country/Region</span>
-                  <select
-                    name="country"
-                    value={fields.country}
-                    onChange={(event) => updateField("country", event.target.value)}
-                    className="h-12 w-full rounded-xl border border-slate-300 bg-white px-4 pb-2 pt-5 text-base outline-none transition focus:border-[#1565d8]"
+                <div className="grid gap-2 sm:grid-cols-[1fr_auto] sm:items-end">
+                  <div className="relative">
+                    <span className="pointer-events-none absolute left-4 top-2 text-xs text-slate-500">Shteti</span>
+                    {showOtherCountryPicker ? (
+                      <select
+                        name="country"
+                        value={fields.country}
+                        onChange={(event) => updateField("country", event.target.value)}
+                        className="h-12 w-full rounded-xl border border-slate-300 bg-white px-4 pb-2 pt-5 text-base outline-none transition focus:border-[#1565d8]"
+                      >
+                        <option value="Shqiperi">Shqiperi</option>
+                        <option value="Kosove">Kosove</option>
+                        <option value="Maqedonia e Veriut">Maqedonia e Veriut</option>
+                      </select>
+                    ) : (
+                      <input
+                        name="country"
+                        type="text"
+                        value="Shqiperi"
+                        readOnly
+                        className="h-12 w-full rounded-xl border border-slate-300 bg-white px-4 pb-2 pt-5 text-base outline-none"
+                      />
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setShowOtherCountryPicker((previous) => {
+                        const next = !previous;
+                        if (!next) {
+                          updateField("country", "Shqiperi");
+                        }
+                        return next;
+                      })
+                    }
+                    className={`h-12 rounded-xl border px-4 text-sm font-semibold transition ${
+                      showOtherCountryPicker
+                        ? "border-[#1565d8] text-[#1565d8] hover:bg-blue-50"
+                        : "border-slate-300 text-slate-700 hover:bg-slate-100"
+                    }`}
                   >
-                    <option>United States</option>
-                    <option>United Kingdom</option>
-                    <option>Germany</option>
-                    <option>Albania</option>
-                    <option>Kosovo</option>
-                  </select>
+                    Shtet tjeter?
+                  </button>
                 </div>
 
                 <div className="grid gap-3 md:grid-cols-2">
@@ -469,7 +527,6 @@ export default function CheckoutPage() {
                     placeholder="First name (optional)"
                     value={fields.firstName}
                     onChange={(event) => updateField("firstName", event.target.value)}
-                    readOnly={isAuthenticatedUser}
                     className="h-12 rounded-xl border border-slate-300 bg-white px-4 text-base outline-none transition focus:border-[#1565d8]"
                   />
                   <input
@@ -479,7 +536,6 @@ export default function CheckoutPage() {
                     required
                     value={fields.lastName}
                     onChange={(event) => updateField("lastName", event.target.value)}
-                    readOnly={isAuthenticatedUser}
                     className="h-12 rounded-xl border border-slate-300 bg-white px-4 text-base outline-none transition focus:border-[#1565d8]"
                   />
                 </div>
@@ -522,42 +578,16 @@ export default function CheckoutPage() {
                   className="h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-base outline-none transition focus:border-[#1565d8]"
                 />
 
-                <div className="grid gap-3 md:grid-cols-3">
-                  <input
-                    name="city"
-                    type="text"
-                    placeholder="City"
-                    required
-                    value={fields.city}
-                    onChange={(event) => updateField("city", event.target.value)}
-                    readOnly={isAuthenticatedUser}
-                    className="h-12 rounded-xl border border-slate-300 bg-white px-4 text-base outline-none transition focus:border-[#1565d8]"
-                  />
-                  <select
-                    name="state"
-                    aria-label="State"
-                    required
-                    value={fields.state}
-                    onChange={(event) => updateField("state", event.target.value)}
-                    className="h-12 rounded-xl border border-slate-300 bg-white px-4 text-base outline-none transition focus:border-[#1565d8]"
-                  >
-                    <option value="">State</option>
-                    <option value="Alabama">Alabama</option>
-                    <option value="California">California</option>
-                    <option value="Florida">Florida</option>
-                    <option value="New York">New York</option>
-                    <option value="Texas">Texas</option>
-                  </select>
-                  <input
-                    name="zip"
-                    type="text"
-                    placeholder="ZIP code"
-                    required
-                    value={fields.zip}
-                    onChange={(event) => updateField("zip", event.target.value)}
-                    className="h-12 rounded-xl border border-slate-300 bg-white px-4 text-base outline-none transition focus:border-[#1565d8]"
-                  />
-                </div>
+                <input
+                  name="city"
+                  type="text"
+                  placeholder="Qyteti"
+                  required
+                  value={fields.city}
+                  onChange={(event) => updateField("city", event.target.value)}
+                  readOnly={isAuthenticatedUser}
+                  className="h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-base outline-none transition focus:border-[#1565d8]"
+                />
 
                 <input
                   name="phone"
@@ -569,16 +599,6 @@ export default function CheckoutPage() {
                   readOnly={isAuthenticatedUser}
                   className="h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-base outline-none transition focus:border-[#1565d8]"
                 />
-
-                <label className="inline-flex items-center gap-2 text-base text-slate-700">
-                  <input
-                    type="checkbox"
-                    checked={saveForNextTime}
-                    onChange={(event) => setSaveForNextTime(event.target.checked)}
-                    className="h-5 w-5 rounded border-slate-300"
-                  />
-                  Save this information for next time
-                </label>
 
                 {!isAuthenticatedUser ? (
                   <>
@@ -609,15 +629,21 @@ export default function CheckoutPage() {
             </section>
 
             <section>
-              <h2 className="mb-3 text-[18px] font-semibold leading-none">Shipping method</h2>
+              <h2 className="mb-3 text-[18px] font-semibold leading-none">Menyra e dergeses</h2>
               {!hasDeliveryAddress ? (
                 <div className="rounded-xl border border-slate-200 bg-slate-100 px-4 py-5 text-center text-base text-slate-500">
-                  Enter your shipping address to view available shipping methods.
+                  Ploteso adresen e dergeses per te pare menyrat e dergeses.
                 </div>
               ) : (
                 <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
                   {options.shipping.methods.map((method) => {
                     const isSelected = selectedShippingMethod === method.code;
+                    const label =
+                      method.code === "standard"
+                        ? "Dergese standarde"
+                        : method.code === "express"
+                          ? "Dergese ekspres"
+                          : method.label;
                     const methodPrice = options.shipping.freeThreshold > 0 && subtotal >= options.shipping.freeThreshold
                       ? 0
                       : method.price;
@@ -638,7 +664,7 @@ export default function CheckoutPage() {
                             className="h-4 w-4 border-slate-300"
                           />
                           <span>
-                            <span className="block text-sm font-semibold text-slate-800">{method.label}</span>
+                            <span className="block text-sm font-semibold text-slate-800">{label}</span>
                             <span className="block text-xs text-slate-500">{method.eta}</span>
                           </span>
                         </span>
@@ -729,6 +755,18 @@ export default function CheckoutPage() {
               ) : null}
             </section>
 
+            <section>
+              <h2 className="mb-3 text-[18px] font-semibold leading-none">Shenim per porosine</h2>
+              <textarea
+                value={orderNote}
+                onChange={(event) => setOrderNote(event.target.value)}
+                rows={4}
+                maxLength={600}
+                placeholder="Shkruaj nje shenim per porosine (opsionale)"
+                className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base outline-none transition focus:border-[#1565d8]"
+              />
+            </section>
+
             {error ? (
               <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>
             ) : null}
@@ -736,9 +774,19 @@ export default function CheckoutPage() {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="hidden h-12 w-full rounded-xl bg-[#1565d8] text-xl font-semibold text-white transition hover:bg-[#0f56bf] disabled:cursor-not-allowed disabled:bg-slate-500 sm:block"
+              className="relative hidden h-12 w-full cursor-pointer rounded-xl bg-[#1565d8] text-xl font-semibold text-white transition hover:bg-[#0f56bf] disabled:cursor-not-allowed disabled:bg-slate-500 sm:block"
             >
-              {isSubmitting ? "Processing..." : "Pay now"}
+              <span className="inline-flex h-full w-full items-center justify-center pr-10">
+                {isSubmitting ? "Po paguhet..." : "Paguaj tani"}
+              </span>
+              {isSubmitting ? (
+                <span className="pointer-events-none absolute right-3 top-1/2 z-20 -translate-y-1/2 rounded-full bg-white p-1 text-[#1565d8] shadow-sm ring-1 ring-white/60">
+                  <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4 animate-spin" aria-hidden="true">
+                    <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="3" className="opacity-35" />
+                    <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+                  </svg>
+                </span>
+              ) : null}
             </button>
           </div>
         </form>
@@ -872,13 +920,22 @@ export default function CheckoutPage() {
             type="submit"
             form="checkout-form"
             disabled={isSubmitting}
-            className="h-12 w-full rounded-xl bg-[#1565d8] text-xl font-semibold text-white transition hover:bg-[#0f56bf] disabled:cursor-not-allowed disabled:bg-slate-500"
+            className="relative h-12 w-full cursor-pointer rounded-xl bg-[#1565d8] text-xl font-semibold text-white transition hover:bg-[#0f56bf] disabled:cursor-not-allowed disabled:bg-slate-500"
           >
-            {isSubmitting ? "Processing..." : "Pay now"}
+            <span className="inline-flex h-full w-full items-center justify-center pr-10">
+              {isSubmitting ? "Po paguhet..." : "Paguaj tani"}
+            </span>
+            {isSubmitting ? (
+              <span className="pointer-events-none absolute right-3 top-1/2 z-20 -translate-y-1/2 rounded-full bg-white p-1 text-[#1565d8] shadow-sm ring-1 ring-white/60">
+                <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4 animate-spin" aria-hidden="true">
+                  <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="3" className="opacity-35" />
+                  <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+                </svg>
+              </span>
+            ) : null}
           </button>
         </div>
       </section>
     </main>
   );
 }
-

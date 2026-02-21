@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getEffectiveProductPricing, getReviewSummary, listProducts } from "@/lib/shop-store";
+import { getEffectiveProductPricing, listProducts } from "@/lib/shop-store";
 import { AddToCartButton } from "@/components/add-to-cart-button";
 
 type ShopPageProps = {
@@ -65,7 +65,6 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {filteredProducts.map((product) => (
             (() => {
-              const reviewSummary = getReviewSummary(product.id);
               const pricing = getEffectiveProductPricing(product);
               return (
                 <article
@@ -86,22 +85,10 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
                       {product.name}
                     </Link>
                   </h3>
-                  <p className="mt-1 text-xs text-slate-500">Stock: {product.stock}</p>
-                  <p className="mt-1 text-xs text-amber-700">
-                    {reviewSummary.count > 0
-                      ? `${reviewSummary.average}/5 (${reviewSummary.count} reviews)`
-                      : "No reviews yet"}
-                  </p>
                   <p className="mt-2 text-base font-bold text-slate-900">{formatCurrency(pricing.current)}</p>
                   {pricing.onSale ? (
                     <p className="text-sm text-slate-500 line-through">{formatCurrency(pricing.regular)}</p>
                   ) : null}
-                  <Link
-                    href={`/product/${product.slug}`}
-                    className="mt-3 inline-block text-sm font-semibold text-slate-700 underline-offset-4 transition hover:text-slate-900 hover:underline"
-                  >
-                    Shiko detajet
-                  </Link>
                   <AddToCartButton
                     productId={product.id}
                     name={product.name}

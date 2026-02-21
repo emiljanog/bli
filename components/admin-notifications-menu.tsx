@@ -238,7 +238,7 @@ export function AdminNotificationsMenu({
           <path d="M10 17a2 2 0 0 0 4 0" />
         </svg>
         {unreadCount > 0 ? (
-          <span className="absolute left-0 top-0 inline-flex h-4 min-w-4 -translate-x-1/3 -translate-y-1/3 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-semibold leading-none text-white">
+          <span className="absolute right-0 top-0 inline-flex h-4 min-w-4 translate-x-[18%] -translate-y-[22%] items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-semibold leading-none text-white">
             {unreadCount > 99 ? "99+" : unreadCount}
           </span>
         ) : null}

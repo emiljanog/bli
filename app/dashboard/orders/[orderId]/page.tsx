@@ -1,7 +1,8 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { updateOrderAction } from "@/app/dashboard/actions";
 import { AdminShell } from "@/components/admin-shell";
-import { findProductNameById, getOrderById, listProducts } from "@/lib/shop-store";
+import { findProductNameById, getOrderById, getUserById, listProducts } from "@/lib/shop-store";
 
 type AdminOrderEditPageProps = {
   params: Promise<{ orderId: string }>;
@@ -16,8 +17,12 @@ export default async function AdminOrderEditPage({ params }: AdminOrderEditPageP
     notFound();
   }
 
+  const customerUser = order.userId ? getUserById(order.userId) : null;
+  const firstItem = order.items[0] ?? null;
+  const isSingleItemOrder = order.items.length <= 1;
+
   return (
-    <AdminShell title={`Edit Order: ${order.id}`} description="Edit customer, product, pricing and status.">
+    <AdminShell title={`Edit Order: ${order.id}`} description="Edit customer, order note, pricing and status.">
       <div className="grid gap-4 xl:grid-cols-[1fr_320px]">
         <article className="rounded-2xl border border-slate-200 bg-white p-5">
           <form action={updateOrderAction} className="space-y-4">
@@ -25,7 +30,16 @@ export default async function AdminOrderEditPage({ params }: AdminOrderEditPageP
             <input type="hidden" name="redirectTo" value={`/dashboard/orders/${order.id}`} />
 
             <label className="block space-y-1">
-              <span className="text-xs font-semibold text-slate-600">Customer</span>
+              <span className="flex items-center justify-between gap-2 text-xs font-semibold text-slate-600">
+                Customer
+                {customerUser ? (
+                  <Link href={`/dashboard/users/${customerUser.id}`} className="text-[#2ea2cc] hover:underline">
+                    Open profile
+                  </Link>
+                ) : (
+                  <span className="text-slate-500">Guest</span>
+                )}
+              </span>
               <input
                 name="customer"
                 type="text"
@@ -35,48 +49,78 @@ export default async function AdminOrderEditPage({ params }: AdminOrderEditPageP
               />
             </label>
 
-            <label className="block space-y-1">
-              <span className="text-xs font-semibold text-slate-600">Product</span>
-              <select
-                name="productId"
-                defaultValue={order.productId}
-                required
-                className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
-              >
-                {products.map((product) => (
-                  <option key={product.id} value={product.id}>
-                    {product.name} ({product.id})
-                  </option>
-                ))}
-              </select>
-            </label>
+            {isSingleItemOrder ? (
+              <>
+                <label className="block space-y-1">
+                  <span className="text-xs font-semibold text-slate-600">Product</span>
+                  <select
+                    name="productId"
+                    defaultValue={firstItem?.productId ?? order.productId}
+                    required
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+                  >
+                    {products.map((product) => (
+                      <option key={product.id} value={product.id}>
+                        {product.name} ({product.id})
+                      </option>
+                    ))}
+                  </select>
+                </label>
 
-            <div className="grid gap-3 sm:grid-cols-2">
-              <label className="block space-y-1">
-                <span className="text-xs font-semibold text-slate-600">Quantity</span>
-                <input
-                  name="quantity"
-                  type="number"
-                  min="1"
-                  defaultValue={order.quantity}
-                  required
-                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
-                />
-              </label>
-              <label className="block space-y-1">
-                <span className="text-xs font-semibold text-slate-600">Status</span>
-                <select
-                  name="status"
-                  defaultValue={order.status}
-                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
-                >
-                  <option>Pending</option>
-                  <option>Paid</option>
-                  <option>Shipped</option>
-                  <option>Cancelled</option>
-                </select>
-              </label>
-            </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="block space-y-1">
+                    <span className="text-xs font-semibold text-slate-600">Quantity</span>
+                    <input
+                      name="quantity"
+                      type="number"
+                      min="1"
+                      defaultValue={firstItem?.quantity ?? order.quantity}
+                      required
+                      className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+                    />
+                  </label>
+                  <label className="block space-y-1">
+                    <span className="text-xs font-semibold text-slate-600">Status</span>
+                    <select
+                      name="status"
+                      defaultValue={order.status}
+                      className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+                    >
+                      <option>Pending</option>
+                      <option>Paid</option>
+                      <option>Shipped</option>
+                      <option>Cancelled</option>
+                    </select>
+                  </label>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <p className="text-xs font-semibold text-slate-600">Products in this order</p>
+                  <div className="mt-2 space-y-1 text-sm text-slate-700">
+                    {order.items.map((item, index) => (
+                      <p key={`${item.productId}-${index}`}>
+                        {findProductNameById(item.productId)} ({item.productId}) x{item.quantity}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+                <label className="block space-y-1">
+                  <span className="text-xs font-semibold text-slate-600">Status</span>
+                  <select
+                    name="status"
+                    defaultValue={order.status}
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+                  >
+                    <option>Pending</option>
+                    <option>Paid</option>
+                    <option>Shipped</option>
+                    <option>Cancelled</option>
+                  </select>
+                </label>
+              </>
+            )}
 
             <div className="grid gap-3 sm:grid-cols-3">
               <label className="block space-y-1">
@@ -112,6 +156,17 @@ export default async function AdminOrderEditPage({ params }: AdminOrderEditPageP
               </label>
             </div>
 
+            <label className="block space-y-1">
+              <span className="text-xs font-semibold text-slate-600">Order note</span>
+              <textarea
+                name="note"
+                rows={4}
+                defaultValue={order.note}
+                placeholder="No order note"
+                className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+              />
+            </label>
+
             <div className="flex justify-end">
               <button
                 type="submit"
@@ -131,11 +186,26 @@ export default async function AdminOrderEditPage({ params }: AdminOrderEditPageP
                 Order ID: <span className="font-semibold">{order.id}</span>
               </p>
               <p>
-                Product: <span className="font-semibold">{findProductNameById(order.productId)}</span>
+                Customer:{" "}
+                {customerUser ? (
+                  <Link href={`/dashboard/users/${customerUser.id}`} className="font-semibold text-[#2ea2cc] hover:underline">
+                    {order.customer}
+                  </Link>
+                ) : (
+                  <span className="font-semibold text-slate-900">Guest</span>
+                )}
+              </p>
+              <p>
+                Products: <span className="font-semibold">{order.items.length}</span>
               </p>
               <p>
                 Created: <span className="font-semibold">{order.createdAt}</span>
               </p>
+              {order.note ? (
+                <p>
+                  Note: <span className="font-semibold">{order.note}</span>
+                </p>
+              ) : null}
             </div>
           </article>
         </aside>

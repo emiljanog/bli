@@ -8,12 +8,16 @@ import type { OrderStatus } from "@/lib/shop-store";
 export type AdminOrderRow = {
   id: string;
   customer: string;
+  customerUserId: string | null;
   productId: string;
   productName: string;
+  itemCount: number;
+  itemSummary: string;
   quantity: number;
   total: number;
   discount: number;
   couponCode: string | null;
+  note: string;
   status: OrderStatus;
   createdAt: string;
 };
@@ -71,14 +75,16 @@ export function AdminOrdersTable({ orders }: AdminOrdersTableProps) {
       if (statusFilter !== "All" && order.status !== statusFilter) return false;
       if (!query) return true;
 
-      return (
-        order.id.toLowerCase().includes(query) ||
-        order.customer.toLowerCase().includes(query) ||
-        order.productName.toLowerCase().includes(query) ||
-        order.productId.toLowerCase().includes(query) ||
-        (order.couponCode ?? "").toLowerCase().includes(query)
-      );
-    });
+        return (
+          order.id.toLowerCase().includes(query) ||
+          order.customer.toLowerCase().includes(query) ||
+          order.productName.toLowerCase().includes(query) ||
+          order.itemSummary.toLowerCase().includes(query) ||
+          order.productId.toLowerCase().includes(query) ||
+          order.note.toLowerCase().includes(query) ||
+          (order.couponCode ?? "").toLowerCase().includes(query)
+        );
+      });
   }, [orders, searchQuery, statusFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filteredOrders.length / pageSize));
@@ -291,6 +297,7 @@ export function AdminOrdersTable({ orders }: AdminOrdersTableProps) {
               <th className="pb-2 font-medium">Total</th>
               <th className="pb-2 font-medium">Discount</th>
               <th className="pb-2 font-medium">Coupon</th>
+              <th className="pb-2 font-medium">Note</th>
               <th className="pb-2 font-medium">Status</th>
               <th className="pb-2 font-medium">Actions</th>
             </tr>
@@ -318,15 +325,28 @@ export function AdminOrdersTable({ orders }: AdminOrdersTableProps) {
                     </Link>
                   </td>
                   <td className="py-3 text-xs text-slate-600">{order.createdAt}</td>
-                  <td className="py-3">{order.customer}</td>
                   <td className="py-3">
-                    <div>{order.productName}</div>
-                    <div className="text-xs text-slate-500">{order.productId}</div>
+                    {order.customerUserId ? (
+                      <Link href={`/dashboard/users/${order.customerUserId}`} className="font-semibold text-[#2ea2cc] hover:underline">
+                        {order.customer || "Customer"}
+                      </Link>
+                    ) : (
+                      <span className="font-semibold text-slate-500">Guest</span>
+                    )}
+                  </td>
+                  <td className="py-3">
+                    <div>{order.itemSummary || order.productName}</div>
+                    <div className="text-xs text-slate-500">{order.itemCount} item(s)</div>
                   </td>
                   <td className="py-3">{order.quantity}</td>
                   <td className="py-3">{formatCurrency(order.total)}</td>
                   <td className="py-3">{order.discount > 0 ? formatCurrency(order.discount) : "-"}</td>
                   <td className="py-3">{order.couponCode ?? "-"}</td>
+                  <td className="py-3">
+                    <span className="block max-w-[220px] truncate text-xs text-slate-600">
+                      {order.note || "-"}
+                    </span>
+                  </td>
                   <td className="py-3">
                     <form action={updateOrderStatusAction} className="flex items-center gap-2">
                       <input type="hidden" name="orderId" value={order.id} />

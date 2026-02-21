@@ -50,15 +50,25 @@ export type OrderStatus = "Pending" | "Paid" | "Shipped" | "Cancelled";
 export type PublicationStatus = "Published" | "Draft";
 export type ProductVisibility = "Public" | "LoggedUsers" | "Password";
 
+export type OrderItem = {
+  productId: string;
+  quantity: number;
+  unitPrice: number;
+  discount: number;
+  total: number;
+};
+
 export type Order = {
   id: string;
   customer: string;
   userId?: string | null;
   productId: string;
   quantity: number;
+  items: OrderItem[];
   total: number;
   discount: number;
   couponCode: string | null;
+  note: string;
   status: OrderStatus;
   createdAt: string;
 };
@@ -367,12 +377,13 @@ type ListMediaOptions = {
 
 type OrderUpdateInput = {
   customer: string;
-  productId: string;
-  quantity: number;
   status: OrderStatus;
+  productId?: string;
+  quantity?: number;
   total?: number;
   discount?: number;
   couponCode?: string | null;
+  note?: string;
 };
 
 type MediaInput = {
@@ -715,6 +726,78 @@ function money(value: number): number {
   return Math.max(0, Number(value.toFixed(2)));
 }
 
+type OrderItemInput = {
+  productId: string;
+  quantity?: number;
+  unitPrice?: number;
+  discount?: number;
+  total?: number;
+};
+
+function normalizeOrderItemRow(raw: unknown, productPriceById: Map<string, number>): OrderItem | null {
+  if (typeof raw !== "object" || raw === null) return null;
+  const row = raw as Partial<OrderItemInput>;
+  const productId = asSafeString(row.productId);
+  if (!productId) return null;
+
+  const quantity = Math.max(1, Math.floor(Number(row.quantity) || 1));
+  const knownPrice = money(productPriceById.get(productId) ?? 0);
+  const parsedUnitPrice = Number(row.unitPrice);
+  const unitPrice = Number.isFinite(parsedUnitPrice) && parsedUnitPrice > 0 ? money(parsedUnitPrice) : knownPrice;
+  const lineSubtotal = money(unitPrice * quantity);
+
+  const parsedDiscount = Number(row.discount);
+  const discount = Number.isFinite(parsedDiscount)
+    ? Math.min(lineSubtotal, money(Math.max(0, parsedDiscount)))
+    : 0;
+
+  const parsedTotal = Number(row.total);
+  const total = Number.isFinite(parsedTotal) ? money(Math.max(0, parsedTotal)) : money(lineSubtotal - discount);
+
+  return {
+    productId,
+    quantity,
+    unitPrice,
+    discount,
+    total,
+  };
+}
+
+function buildLegacyOrderItem(
+  input: { productId: string; quantity: number; total?: number; discount?: number },
+  productPriceById: Map<string, number>,
+): OrderItem | null {
+  const productId = asSafeString(input.productId);
+  if (!productId) return null;
+
+  const quantity = Math.max(1, Math.floor(Number(input.quantity) || 1));
+  const total = money(input.total ?? 0);
+  const discount = money(input.discount ?? 0);
+  const knownUnitPrice = money(productPriceById.get(productId) ?? 0);
+  const derivedUnitPrice = quantity > 0 ? money((total + discount) / quantity) : knownUnitPrice;
+  const unitPrice = derivedUnitPrice > 0 ? derivedUnitPrice : knownUnitPrice;
+
+  return {
+    productId,
+    quantity,
+    unitPrice,
+    discount,
+    total: total > 0 ? total : money(unitPrice * quantity - discount),
+  };
+}
+
+function summarizeOrderItems(items: OrderItem[]): { quantity: number; discount: number; total: number } {
+  return items.reduce(
+    (acc, item) => {
+      acc.quantity += Math.max(1, Math.floor(item.quantity));
+      acc.discount += money(item.discount);
+      acc.total += money(item.total);
+      return acc;
+    },
+    { quantity: 0, discount: 0, total: 0 },
+  );
+}
+
 function normalizeSalePrice(price: number, salePrice: unknown): number | null {
   const regularPrice = money(price);
   const parsed = Number(salePrice);
@@ -904,6 +987,18 @@ function cloneReview(review: ProductReview): ProductReview {
 
 function cloneUser(user: User): User {
   return { ...user };
+}
+
+function cloneOrderItem(item: OrderItem): OrderItem {
+  return { ...item };
+}
+
+function cloneOrder(order: Order): Order {
+  const safeItems = Array.isArray(order.items) ? order.items : [];
+  return {
+    ...order,
+    items: safeItems.map(cloneOrderItem),
+  };
 }
 
 function clonePage(page: Page): Page {
@@ -1363,14 +1458,55 @@ function normalizeReviewsInPlace(reviews: ProductReview[]): void {
 }
 
 function normalizeOrdersInPlace(orders: Order[]): void {
+  const productPriceById = new Map(
+    store().products.map((product) => [product.id, getEffectiveProductPricing(product).current]),
+  );
+
   for (const order of orders) {
     order.customer = asSafeString(order.customer);
     order.userId = asSafeString(order.userId ?? "") || null;
-    order.productId = asSafeString(order.productId);
-    order.quantity = Math.max(1, Math.floor(order.quantity));
+
+    const rawItems = Array.isArray((order as Partial<Order>).items)
+      ? (order as Partial<Order>).items
+      : [];
+    const normalizedItems = rawItems
+      .map((item) => normalizeOrderItemRow(item, productPriceById))
+      .filter((item): item is OrderItem => Boolean(item));
+
+    if (normalizedItems.length === 0) {
+      const legacyItem = buildLegacyOrderItem(
+        {
+          productId: asSafeString(order.productId),
+          quantity: Math.max(1, Math.floor(Number(order.quantity) || 1)),
+          total: order.total,
+          discount: order.discount,
+        },
+        productPriceById,
+      );
+      if (legacyItem) {
+        normalizedItems.push(legacyItem);
+      }
+    }
+
+    order.items = normalizedItems;
+
+    const itemSummary = summarizeOrderItems(order.items);
+    const firstItem = order.items[0] ?? null;
+    order.productId = firstItem?.productId ?? asSafeString(order.productId);
+    order.quantity =
+      itemSummary.quantity > 0
+        ? itemSummary.quantity
+        : Math.max(1, Math.floor(Number(order.quantity) || 1));
     order.total = money(order.total);
+    if (order.total <= 0 && itemSummary.total > 0) {
+      order.total = money(itemSummary.total);
+    }
     order.discount = money(order.discount ?? 0);
+    if (order.discount <= 0 && itemSummary.discount > 0) {
+      order.discount = money(itemSummary.discount);
+    }
     order.couponCode = normalizeCouponCode(order.couponCode ?? "") || null;
+    order.note = asSafeString((order as Partial<Order>).note ?? "");
     if (
       order.status !== "Pending" &&
       order.status !== "Paid" &&
@@ -1829,9 +1965,19 @@ function createInitialStore(): Store {
         customer: "Arber D.",
         productId: "PRD-1002",
         quantity: 1,
+        items: [
+          {
+            productId: "PRD-1002",
+            quantity: 1,
+            unitPrice: 129,
+            discount: 0,
+            total: 129,
+          },
+        ],
         total: 129,
         discount: 0,
         couponCode: null,
+        note: "",
         status: "Paid",
         createdAt: "2026-02-10",
       },
@@ -1840,9 +1986,19 @@ function createInitialStore(): Store {
         customer: "Sara K.",
         productId: "PRD-1001",
         quantity: 1,
+        items: [
+          {
+            productId: "PRD-1001",
+            quantity: 1,
+            unitPrice: 899,
+            discount: 0,
+            total: 899,
+          },
+        ],
         total: 899,
         discount: 0,
         couponCode: null,
+        note: "",
         status: "Shipped",
         createdAt: "2026-02-11",
       },
@@ -1851,9 +2007,19 @@ function createInitialStore(): Store {
         customer: "Denisa T.",
         productId: "PRD-1004",
         quantity: 2,
+        items: [
+          {
+            productId: "PRD-1004",
+            quantity: 2,
+            unitPrice: 159,
+            discount: 0,
+            total: 318,
+          },
+        ],
         total: 318,
         discount: 0,
         couponCode: null,
+        note: "",
         status: "Pending",
         createdAt: "2026-02-12",
       },
@@ -2018,6 +2184,14 @@ function migrateLegacyEntityIdsInPlace(s: Store): void {
     const mappedProductId = productIdMap.get(order.productId);
     if (mappedProductId) {
       order.productId = mappedProductId;
+    }
+    if (Array.isArray(order.items)) {
+      for (const item of order.items) {
+        const mappedItemProductId = productIdMap.get(item.productId);
+        if (mappedItemProductId) {
+          item.productId = mappedItemProductId;
+        }
+      }
     }
   }
 
@@ -2199,7 +2373,7 @@ export function getProductBySlug(
 }
 
 export function listOrders(): Order[] {
-  return [...store().orders].sort((a, b) => b.id.localeCompare(a.id));
+  return [...store().orders].sort((a, b) => b.id.localeCompare(a.id)).map(cloneOrder);
 }
 
 export function listOrdersByCustomer(customerQuery: string): Order[] {
@@ -3251,36 +3425,66 @@ export function deleteProductPermanently(productId: string): boolean {
 export function addOrder(input: {
   customer: string;
   userId?: string | null;
-  productId: string;
-  quantity: number;
   status: OrderStatus;
+  productId?: string;
+  quantity?: number;
+  items?: OrderItemInput[];
   total?: number;
   discount?: number;
   couponCode?: string | null;
+  note?: string;
 }): Order {
   const s = store();
-  const product = s.products.find((item) => item.id === input.productId);
-  const productPrice = product ? getEffectiveProductPricing(product).current : 0;
-  const quantity = Math.max(1, Math.floor(input.quantity));
-  const baseTotal = money(quantity * productPrice);
-  const discount = money(input.discount ?? 0);
-  const totalFromInput = input.total !== undefined ? money(input.total) : money(baseTotal - discount);
+  const productPriceById = new Map(
+    s.products.map((product) => [product.id, getEffectiveProductPricing(product).current]),
+  );
+
+  const normalizedItems = (Array.isArray(input.items) ? input.items : [])
+    .map((item) => normalizeOrderItemRow(item, productPriceById))
+    .filter((item): item is OrderItem => Boolean(item));
+
+  if (normalizedItems.length === 0) {
+    const fallbackProductId = asSafeString(input.productId) || s.products[0]?.id || "PRD-UNKNOWN";
+    const legacyItem = buildLegacyOrderItem(
+      {
+        productId: fallbackProductId,
+        quantity: Math.max(1, Math.floor(Number(input.quantity) || 1)),
+        total: input.total,
+        discount: input.discount,
+      },
+      productPriceById,
+    );
+    if (legacyItem) {
+      normalizedItems.push(legacyItem);
+    }
+  }
+
+  const summary = summarizeOrderItems(normalizedItems);
+  const firstItem = normalizedItems[0] ?? null;
+  const discountFromInput =
+    input.discount !== undefined ? money(input.discount) : money(summary.discount);
+  const totalFromInput =
+    input.total !== undefined ? money(input.total) : money(summary.total - discountFromInput + summary.discount);
 
   const order: Order = {
     id: nextId("ORD"),
     customer: asSafeString(input.customer),
     userId: asSafeString(input.userId ?? "") || null,
-    productId: input.productId,
-    quantity,
+    productId: firstItem?.productId ?? asSafeString(input.productId),
+    quantity: summary.quantity > 0 ? summary.quantity : Math.max(1, Math.floor(Number(input.quantity) || 1)),
+    items: normalizedItems,
     total: totalFromInput,
-    discount,
+    discount: discountFromInput,
     couponCode: input.couponCode ? normalizeCouponCode(input.couponCode) : null,
+    note: asSafeString(input.note),
     status: input.status,
     createdAt: new Date().toISOString().slice(0, 10),
   };
   s.orders.unshift(order);
-  if (product) {
-    product.stock = Math.max(0, product.stock - quantity);
+  for (const item of normalizedItems) {
+    const product = s.products.find((candidate) => candidate.id === item.productId);
+    if (!product) continue;
+    product.stock = Math.max(0, product.stock - Math.max(1, Math.floor(item.quantity)));
   }
   if (s.settings.notifyAdminPaidOrder) {
     pushAdminNotification({
@@ -3290,34 +3494,88 @@ export function addOrder(input: {
       href: `/dashboard/orders/${order.id}`,
     });
   }
-  return order;
+  return cloneOrder(order);
 }
 
 export function getOrderById(orderId: string): Order | null {
   const target = store().orders.find((item) => item.id === orderId);
-  return target ? { ...target } : null;
+  return target ? cloneOrder(target) : null;
 }
 
 export function updateOrder(orderId: string, input: OrderUpdateInput): Order | null {
-  const target = store().orders.find((item) => item.id === orderId);
+  const s = store();
+  const target = s.orders.find((item) => item.id === orderId);
   if (!target) return null;
 
-  const product = store().products.find((item) => item.id === input.productId);
-  const productPrice = product ? getEffectiveProductPricing(product).current : 0;
-  const quantity = Math.max(1, Math.floor(input.quantity));
-  const baseTotal = money(quantity * productPrice);
-  const discount = money(input.discount ?? 0);
-  const totalFromInput = input.total !== undefined ? money(input.total) : money(baseTotal - discount);
+  const productPriceById = new Map(
+    s.products.map((product) => [product.id, getEffectiveProductPricing(product).current]),
+  );
+  const currentItems = Array.isArray(target.items)
+    ? target.items
+    : [];
+  const nextItems =
+    currentItems.length > 0
+      ? currentItems.map((item) => ({ ...item }))
+      : (() => {
+          const legacy = buildLegacyOrderItem(
+            {
+              productId: target.productId,
+              quantity: target.quantity,
+              total: target.total,
+              discount: target.discount,
+            },
+            productPriceById,
+          );
+          return legacy ? [legacy] : [];
+        })();
+
+  if (input.productId !== undefined) {
+    const nextProductId = asSafeString(input.productId);
+    if (nextProductId) {
+      if (nextItems.length === 0) {
+        nextItems.push({
+          productId: nextProductId,
+          quantity: 1,
+          unitPrice: money(productPriceById.get(nextProductId) ?? 0),
+          discount: 0,
+          total: 0,
+        });
+      } else {
+        nextItems[0].productId = nextProductId;
+        const knownPrice = money(productPriceById.get(nextProductId) ?? nextItems[0].unitPrice);
+        if (knownPrice > 0) {
+          nextItems[0].unitPrice = knownPrice;
+        }
+      }
+    }
+  }
+
+  if (input.quantity !== undefined && nextItems.length > 0) {
+    nextItems[0].quantity = Math.max(1, Math.floor(Number(input.quantity) || 1));
+  }
+
+  const normalizedItems = nextItems
+    .map((item) => normalizeOrderItemRow(item, productPriceById))
+    .filter((item): item is OrderItem => Boolean(item));
+  const summary = summarizeOrderItems(normalizedItems);
+  const firstItem = normalizedItems[0] ?? null;
 
   target.customer = asSafeString(input.customer);
-  target.productId = asSafeString(input.productId);
-  target.quantity = quantity;
-  target.discount = discount;
-  target.total = totalFromInput;
+  target.items = normalizedItems;
+  target.productId = firstItem?.productId ?? target.productId;
+  target.quantity =
+    summary.quantity > 0
+      ? summary.quantity
+      : Math.max(1, Math.floor(Number(target.quantity) || 1));
+  target.discount = input.discount !== undefined ? money(input.discount) : money(summary.discount);
+  target.total = input.total !== undefined ? money(input.total) : money(summary.total);
   target.couponCode = input.couponCode ? normalizeCouponCode(input.couponCode) : null;
+  if (input.note !== undefined) {
+    target.note = asSafeString(input.note);
+  }
   target.status = input.status;
 
-  return { ...target };
+  return cloneOrder(target);
 }
 
 export function updateOrderStatus(orderId: string, status: OrderStatus): void {

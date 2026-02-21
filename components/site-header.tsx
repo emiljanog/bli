@@ -4,8 +4,9 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { logoutAdminAction } from "@/app/dashboard/actions";
+import { SiteCartDrawer } from "@/components/site-cart-drawer";
 import type { SiteSettings } from "@/lib/shop-store";
-import { getCartCount, subscribeCartUpdates } from "@/lib/cart";
+import { getCartCount, subscribeCartDrawerOpen, subscribeCartUpdates } from "@/lib/cart";
 
 type SiteHeaderProps = {
   siteSettings: SiteSettings;
@@ -63,6 +64,7 @@ export function SiteHeader({
   const [siteAccountMenuOpen, setSiteAccountMenuOpen] = useState(false);
   const [isDesktopViewport, setIsDesktopViewport] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [cartDrawerOpen, setCartDrawerOpen] = useState(false);
   const [searchValue, setSearchValue] = useState("");
   const [searchResults, setSearchResults] = useState<ProductSearchResult[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
@@ -136,6 +138,17 @@ export function SiteHeader({
   useEffect(() => {
     setSiteAccountMenuOpen(false);
   }, [pathname]);
+
+  useEffect(() => {
+    setCartDrawerOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    const unsubscribe = subscribeCartDrawerOpen(() => {
+      setCartDrawerOpen(true);
+    });
+    return () => unsubscribe();
+  }, []);
 
   useEffect(() => {
     if (!siteAccountMenuOpen) return;
@@ -472,10 +485,11 @@ export function SiteHeader({
                   )}
                 </div>
               </div>
-              <Link
-                href="/cart"
+              <button
+                type="button"
                 aria-label="Cart"
-                className="relative inline-flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-700 transition hover:bg-slate-200"
+                onClick={() => setCartDrawerOpen(true)}
+                className="relative inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-full bg-slate-100 text-slate-700 transition hover:bg-slate-200"
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -485,16 +499,15 @@ export function SiteHeader({
                   strokeWidth="2"
                   className="h-5 w-5"
                 >
-                  <circle cx="9" cy="20" r="1.5" />
-                  <circle cx="17" cy="20" r="1.5" />
-                  <path d="M3 4h2l2.5 11h10.5l2-8H7" />
+                  <path d="M6.5 8h11l-1 11.5a1 1 0 0 1-1 .9h-7a1 1 0 0 1-1-.9L6.5 8z" />
+                  <path d="M9 8V6.5a3 3 0 0 1 6 0V8" />
                 </svg>
                 {cartCount > 0 ? (
                   <span className="absolute -right-1 -top-1 min-w-4 rounded-full bg-slate-900 px-1 text-center text-[10px] font-semibold leading-4 text-white">
                     {cartCount > 99 ? "99+" : cartCount}
                   </span>
                 ) : null}
-              </Link>
+              </button>
               <button
                 type="button"
                 aria-label="Toggle menu"
@@ -621,6 +634,11 @@ export function SiteHeader({
           </nav>
         </header>
       </div>
+      <SiteCartDrawer
+        open={cartDrawerOpen}
+        onClose={() => setCartDrawerOpen(false)}
+        isLoggedIn={Boolean(accountUser)}
+      />
     </div>
   );
 }

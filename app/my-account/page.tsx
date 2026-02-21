@@ -261,21 +261,25 @@ export default async function MyAccountPage({ searchParams }: MyAccountPageProps
                           </p>
                         </summary>
                         <div className="border-t border-slate-200 px-3 py-3 text-slate-700">
-                          <p>
-                            Product: <span className="font-semibold text-slate-900">{findProductNameById(order.productId)}</span>
-                          </p>
-                          <p className="mt-1">
-                            Quantity: <span className="font-semibold text-slate-900">{order.quantity}</span>
-                          </p>
+                          <p className="font-semibold text-slate-900">Products</p>
+                          <div className="mt-1 space-y-1 text-sm">
+                            {order.items.map((item, index) => (
+                              <p key={`${order.id}-${item.productId}-${index}`}>
+                                <span className="font-semibold text-slate-900">{findProductNameById(item.productId)}</span> x{item.quantity}
+                              </p>
+                            ))}
+                          </div>
                           <p className="mt-1">
                             Discount: <span className="font-semibold text-slate-900">{asMoney(order.discount)}</span>
                           </p>
                           <p className="mt-1">
                             Coupon: <span className="font-semibold text-slate-900">{order.couponCode || "-"}</span>
                           </p>
-                          <p className="mt-1">
-                            Product ID: <span className="font-semibold text-slate-900">{order.productId}</span>
-                          </p>
+                          {order.note ? (
+                            <p className="mt-1">
+                              Note: <span className="font-semibold text-slate-900">{order.note}</span>
+                            </p>
+                          ) : null}
                         </div>
                       </details>
                     ))}

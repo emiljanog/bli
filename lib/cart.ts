@@ -15,6 +15,7 @@ export type CartItemInput = {
 };
 
 const CART_UPDATED_EVENT = "bli-cart-updated";
+const CART_DRAWER_OPEN_EVENT = "bli-cart-drawer-open";
 
 let cartCache: CartItem[] = [];
 
@@ -69,6 +70,11 @@ function cloneCartItems(items: CartItem[]): CartItem[] {
 function emitCartUpdated(): void {
   if (!canUseWindow()) return;
   window.dispatchEvent(new CustomEvent(CART_UPDATED_EVENT));
+}
+
+function emitCartDrawerOpen(): void {
+  if (!canUseWindow()) return;
+  window.dispatchEvent(new CustomEvent(CART_DRAWER_OPEN_EVENT));
 }
 
 async function requestCart(
@@ -127,6 +133,10 @@ export async function addItemToCart(input: CartItemInput): Promise<CartItem[]> {
   return items;
 }
 
+export function openCartDrawer(): void {
+  emitCartDrawerOpen();
+}
+
 export async function getCartCount(): Promise<number> {
   const items = await readCart();
   return items.reduce((sum, item) => sum + sanitizeCount(item.quantity), 0);
@@ -173,5 +183,16 @@ export function subscribeCartUpdates(onChange: () => void): () => void {
     window.removeEventListener(CART_UPDATED_EVENT, onCustom);
     window.removeEventListener("focus", onFocus);
     document.removeEventListener("visibilitychange", onVisibilityChange);
+  };
+}
+
+export function subscribeCartDrawerOpen(onOpen: () => void): () => void {
+  if (!canUseWindow()) return () => {};
+
+  const onCustom = () => onOpen();
+  window.addEventListener(CART_DRAWER_OPEN_EVENT, onCustom);
+
+  return () => {
+    window.removeEventListener(CART_DRAWER_OPEN_EVENT, onCustom);
   };
 }

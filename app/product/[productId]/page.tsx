@@ -2,11 +2,13 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import { AddToCartButton } from "@/components/add-to-cart-button";
+import { BuyNowButton } from "@/components/buy-now-button";
 import { ProductGallery } from "@/components/product-gallery";
 import { ProductReviews } from "@/components/product-reviews";
+import { WhatsAppOrderButton } from "@/components/whatsapp-order-button";
 import { ADMIN_COOKIE_NAME, ADMIN_ROLE_COOKIE_NAME, ADMIN_SESSION_VALUE, resolveAdminRole } from "@/lib/admin-auth";
 import { getProductPreviewDraft } from "@/lib/product-preview-drafts";
-import { getEffectiveProductPricing, getProductById, getProductBySlug, listReviews, type Product } from "@/lib/shop-store";
+import { getEffectiveProductPricing, getProductById, getProductBySlug, listProducts, listReviews, type Product } from "@/lib/shop-store";
 
 function formatCurrency(amount: number): string {
   return new Intl.NumberFormat("en-US", {
@@ -90,6 +92,22 @@ export default async function ProductPage({ params, searchParams }: ProductPageP
     const gallery = product.gallery.length > 0 ? product.gallery : [product.image];
     const pricing = getEffectiveProductPricing(product);
     const reviews = listReviews({ productId: product.id, status: "Approved" });
+    const normalizedCategories = Array.from(new Set([...product.categories, product.category].map((value) => value.trim()).filter(Boolean)));
+    const relatedProducts = listProducts({ includeDrafts: isPreviewMode })
+      .filter((candidate) => candidate.id !== product.id)
+      .filter((candidate) => {
+        if (candidate.visibility === "LoggedUsers" && !isLoggedIn) {
+          return false;
+        }
+        if (candidate.visibility === "Password" && !isAdminViewer) {
+          return false;
+        }
+        const candidateCategories = Array.from(
+          new Set([...candidate.categories, candidate.category].map((value) => value.trim()).filter(Boolean)),
+        );
+        return candidateCategories.some((name) => normalizedCategories.includes(name));
+      })
+      .slice(0, 4);
 
     return (
       <main className="text-slate-900">
@@ -147,17 +165,56 @@ export default async function ProductPage({ params, searchParams }: ProductPageP
                   image={product.image}
                   className="rounded-xl site-primary-bg px-5 py-3 text-sm font-semibold text-white transition site-primary-bg-hover"
                 />
-                <Link
-                  href="/shop"
-                  className="rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
-                >
-                  Kthehu te Shop
-                </Link>
+                <BuyNowButton
+                  productId={product.id}
+                  name={product.name}
+                  price={pricing.current}
+                  image={product.image}
+                  className="rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-700"
+                />
+              </div>
+              <div className="mt-5">
+                <WhatsAppOrderButton
+                  productPath={`/product/${encodeURIComponent(product.slug)}`}
+                  className="inline-flex rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-[#25d366] transition hover:bg-slate-100 sm:px-4 sm:text-sm"
+                />
               </div>
             </div>
           </div>
 
           <ProductReviews productId={product.id} initialReviews={reviews} />
+
+          {relatedProducts.length > 0 ? (
+            <section className="mt-10">
+              <div className="mb-4">
+                <h2 className="text-2xl font-bold text-slate-900">Produkte te tjera te rekomanduara</h2>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                {relatedProducts.map((relatedProduct) => {
+                  const relatedPricing = getEffectiveProductPricing(relatedProduct);
+                  return (
+                    <article key={relatedProduct.id} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                      <Link href={`/product/${encodeURIComponent(relatedProduct.slug)}`} className="block">
+                        <div className="aspect-[4/3] w-full bg-slate-100">
+                          {relatedProduct.image ? (
+                            <div
+                              className="h-full w-full bg-cover bg-center"
+                              style={{ backgroundImage: `url('${relatedProduct.image}')` }}
+                            />
+                          ) : null}
+                        </div>
+                        <div className="space-y-1 p-4">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">{relatedProduct.category}</p>
+                          <h3 className="line-clamp-2 text-sm font-semibold text-slate-900">{relatedProduct.name}</h3>
+                          <p className="text-base font-bold text-slate-900">{formatCurrency(relatedPricing.current)}</p>
+                        </div>
+                      </Link>
+                    </article>
+                  );
+                })}
+              </div>
+            </section>
+          ) : null}
         </section>
       </main>
     );

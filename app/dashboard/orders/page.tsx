@@ -1,19 +1,29 @@
 import { AdminShell } from "@/components/admin-shell";
 import { AdminOrdersTable } from "@/components/admin-orders-table";
 import { addOrderAction } from "@/app/dashboard/actions";
-import { findProductNameById, listOrders, listProducts } from "@/lib/shop-store";
+import { findProductNameById, getUserById, listOrders, listProducts } from "@/lib/shop-store";
 
 export default async function AdminOrdersPage() {
   const products = listProducts({ includeDrafts: true });
   const orders = listOrders().map((order) => ({
+    customerUserId: order.userId ? getUserById(order.userId)?.id ?? null : null,
     id: order.id,
     customer: order.customer,
     productId: order.productId,
     productName: findProductNameById(order.productId),
+    itemCount: order.items.length,
+    itemSummary:
+      order.items.length === 0
+        ? findProductNameById(order.productId)
+        : order.items
+            .slice(0, 2)
+            .map((item) => `${findProductNameById(item.productId)} x${item.quantity}`)
+            .join(", ") + (order.items.length > 2 ? ` +${order.items.length - 2} more` : ""),
     quantity: order.quantity,
     total: order.total,
     discount: order.discount,
     couponCode: order.couponCode,
+    note: order.note,
     status: order.status,
     createdAt: order.createdAt,
   }));
@@ -89,6 +99,12 @@ export default async function AdminOrdersPage() {
               min="0"
               step="0.01"
               placeholder="Manual total (optional)"
+              className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+            />
+            <textarea
+              name="note"
+              rows={3}
+              placeholder="Order note (optional)"
               className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
             />
             <input type="hidden" name="redirectTo" value="/dashboard/orders" />

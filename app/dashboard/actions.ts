@@ -1541,6 +1541,7 @@ export async function addOrderAction(formData: FormData) {
   const total = asNumber(formData.get("total"));
   const discount = asNumber(formData.get("discount"));
   const couponCode = asString(formData.get("couponCode"));
+  const note = asString(formData.get("note"));
   const redirectTo = asLastString(formData.getAll("redirectTo"));
 
   if (!customer || !productId) return;
@@ -1553,6 +1554,7 @@ export async function addOrderAction(formData: FormData) {
     total: total > 0 ? total : undefined,
     discount: discount > 0 ? discount : undefined,
     couponCode: couponCode || null,
+    note,
   });
 
   revalidateOrderPaths();
@@ -1577,17 +1579,20 @@ export async function updateOrderAction(formData: FormData) {
   const total = asNumber(formData.get("total"));
   const discount = asNumber(formData.get("discount"));
   const couponCode = asString(formData.get("couponCode"));
+  const note = asString(formData.get("note"));
   const redirectTo = asLastString(formData.getAll("redirectTo"));
-  if (!orderId || !customer || !productId) return;
+  if (!orderId || !customer) return;
+  const hasProductUpdate = Boolean(productId);
 
   updateOrder(orderId, {
     customer,
-    productId,
-    quantity,
+    productId: hasProductUpdate ? productId : undefined,
+    quantity: hasProductUpdate ? quantity : undefined,
     status,
     total: total > 0 ? total : undefined,
     discount: discount > 0 ? discount : undefined,
     couponCode: couponCode || null,
+    note,
   });
 
   revalidateOrderPaths(orderId);

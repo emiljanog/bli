@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { addItemToCart } from "@/lib/cart";
+import { addItemToCart, openCartDrawer } from "@/lib/cart";
 
 type AddToCartButtonProps = {
   productId: string;
@@ -36,6 +36,7 @@ export function AddToCartButton({ productId, name, price, image, className }: Ad
         image,
         quantity: 1,
       });
+      openCartDrawer();
 
       setIsAdded(true);
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
@@ -46,7 +47,12 @@ export function AddToCartButton({ productId, name, price, image, className }: Ad
   };
 
   return (
-    <button type="button" onClick={() => void handleClick()} className={className} disabled={isPending}>
+    <button
+      type="button"
+      onClick={() => void handleClick()}
+      className={`${className ?? ""} cursor-pointer disabled:cursor-not-allowed`}
+      disabled={isPending}
+    >
       {isAdded ? "Added" : isPending ? "Adding..." : "Add to cart"}
     </button>
   );
