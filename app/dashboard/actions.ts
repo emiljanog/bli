@@ -245,6 +245,17 @@ function revalidateAdminPath(path: string) {
   }
 }
 
+function revalidateStoreCategorySurfaces(slug = "") {
+  revalidatePath("/");
+  revalidatePath("/shop");
+  revalidatePath("/product");
+  if (slug) {
+    revalidatePath(`/shop/${slug}`);
+  }
+  revalidateAdminPath("/admin/store/categories");
+  revalidateAdminPath("/admin/categories");
+}
+
 async function ensureUploadSubdir(subdir: string): Promise<{ absolute: string; publicBase: string }> {
   const normalizedSubdir = subdir.replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
   const absolute = path.join(process.cwd(), "public", "uploads", normalizedSubdir);
@@ -1072,6 +1083,55 @@ export async function updateHomeSliderSettingsAction(formData: FormData) {
   revalidateAdminPath("/admin/slider");
 
   redirectToAdminDestination(redirectTo);
+}
+
+export async function upsertStoreCategoryAction(formData: FormData) {
+  const redirectTo = asLastString(formData.getAll("redirectTo")) || "/dashboard/store/categories";
+  const name = asString(formData.get("name"));
+  const currentSlug = slugifyValue(asString(formData.get("currentSlug")));
+  const requestedSlug = slugifyValue(asString(formData.get("slug")));
+  const slug = currentSlug || requestedSlug || slugifyValue(name);
+  if (!name || !slug) {
+    redirectToAdminDestination(redirectTo, "Ploteso emrin e kategorise.");
+    return;
+  }
+
+  const description = asString(formData.get("description"));
+  const iconCustom = asString(formData.get("iconCustom"));
+  const iconPreset = asString(formData.get("iconPreset"));
+  const icon = iconCustom || iconPreset;
+  const imageUrlInput = asString(formData.get("imageUrl"));
+  const imageFromUpload = await asImageUploadWebpUrl(formData.get("imageFile"), "categories");
+  const finalImageUrl = imageFromUpload ?? imageUrlInput;
+
+  upsertProductCategories([
+    {
+      name,
+      slug,
+      description,
+      imageUrl: finalImageUrl,
+      icon,
+    },
+  ]);
+
+  revalidateStoreCategorySurfaces(slug);
+  redirectToAdminDestination(redirectTo, currentSlug ? "Kategoria u perditesua." : "Kategoria u shtua.");
+}
+
+export async function deleteStoreCategoryAction(formData: FormData) {
+  const redirectTo = asLastString(formData.getAll("redirectTo")) || "/dashboard/store/categories";
+  const slug = slugifyValue(asString(formData.get("slug")));
+  if (!slug) {
+    redirectToAdminDestination(redirectTo, "Slug i kategorise mungon.");
+    return;
+  }
+
+  const removed = deleteProductCategoryBySlug(slug);
+  revalidateStoreCategorySurfaces(slug);
+  redirectToAdminDestination(
+    redirectTo,
+    removed ? "Kategoria u fshi me sukses." : "Kategoria nuk u gjet.",
+  );
 }
 
 export async function addProductAction(formData: FormData) {

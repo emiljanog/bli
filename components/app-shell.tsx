@@ -112,6 +112,8 @@ export function AppShell({ children, siteSettings, adminToolbar = null, accountU
                     <img
                       src={logoSrc}
                       alt={`${siteSettings.siteTitle} logo`}
+                      width={150}
+                      height={34}
                       className="h-[34px] w-auto max-w-[150px] object-contain"
                     />
                   ) : (

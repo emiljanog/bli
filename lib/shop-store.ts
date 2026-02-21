@@ -36,6 +36,7 @@ export type ProductCategory = {
   slug: string;
   description: string;
   imageUrl: string;
+  icon?: string;
 };
 
 export type ProductTag = {
@@ -1225,6 +1226,7 @@ function normalizeProductCategoriesInPlace(categories: ProductCategory[]): void 
     category.name = asSafeString(category.name);
     category.description = asSafeString(category.description);
     category.imageUrl = asSafeString(category.imageUrl);
+    category.icon = asSafeString(category.icon ?? "");
 
     const baseSlug = slugify(asSafeString(category.slug) || category.name);
     category.slug = nextUniqueSlug(baseSlug, takenSlugs);
@@ -1270,6 +1272,7 @@ function ensureTaxonomiesInPlace(s: Store): void {
           slug: categorySlug,
           description: "",
           imageUrl: "",
+          icon: "",
         };
         s.productCategories.push(created);
         categoryBySlug.set(categorySlug, created);
@@ -1287,6 +1290,7 @@ function ensureTaxonomiesInPlace(s: Store): void {
           slug: uncategorizedSlug,
           description: "",
           imageUrl: "",
+          icon: "",
         };
         s.productCategories.push(uncategorized);
         categoryBySlug.set(uncategorizedSlug, uncategorized);
@@ -1815,6 +1819,7 @@ function createInitialStore(): Store {
         slug,
         description: "",
         imageUrl: "",
+        icon: "",
       };
     }),
     productTags: [],
@@ -2971,7 +2976,7 @@ export function setPagePublishStatus(pageId: string, publishStatus: PublicationS
 }
 
 export function upsertProductCategories(
-  input: Array<{ name: string; slug?: string; description?: string; imageUrl?: string }>,
+  input: Array<{ name: string; slug?: string; description?: string; imageUrl?: string; icon?: string }>,
 ): ProductCategory[] {
   const s = store();
   for (const draft of input) {
@@ -2980,9 +2985,36 @@ export function upsertProductCategories(
     const slug = slugify(asSafeString(draft.slug) || name);
     const existing = s.productCategories.find((item) => item.slug === slug);
     if (existing) {
+      const previousName = existing.name;
+      if (previousName && previousName !== name) {
+        for (const product of s.products) {
+          let touched = false;
+          product.categories = product.categories.map((categoryName) => {
+            if (slugify(categoryName) === existing.slug) {
+              touched = true;
+              return name;
+            }
+            return categoryName;
+          });
+          if (slugify(product.category) === existing.slug) {
+            product.category = name;
+            touched = true;
+          }
+          if (touched) {
+            const deduped = Array.from(new Set(product.categories.filter(Boolean)));
+            product.categories = deduped.length > 0 ? deduped : [name];
+            if (!product.category || !product.categories.includes(product.category)) {
+              product.category = product.categories[0] ?? name;
+            }
+          }
+        }
+      }
       existing.name = name;
       existing.description = asSafeString(draft.description);
       existing.imageUrl = asSafeString(draft.imageUrl);
+      if (draft.icon !== undefined) {
+        existing.icon = asSafeString(draft.icon);
+      }
       continue;
     }
     s.productCategories.push({
@@ -2991,6 +3023,7 @@ export function upsertProductCategories(
       slug,
       description: asSafeString(draft.description),
       imageUrl: asSafeString(draft.imageUrl),
+      icon: asSafeString(draft.icon),
     });
   }
 

@@ -283,6 +283,8 @@ export function SiteHeader({
                 <img
                   src={logoSrc}
                   alt={`${siteSettings.siteTitle} logo`}
+                  width={140}
+                  height={34}
                   className="h-[34px] w-auto max-w-[140px] object-contain"
                 />
               ) : (
@@ -299,17 +301,13 @@ export function SiteHeader({
                   <Link
                     key={item.label}
                     href={item.href}
-                    className={`group relative px-1 pb-1 text-sm font-semibold transition-colors duration-150 ${
-                      isActive ? "text-[var(--site-color-primary)]" : "text-slate-700 hover:text-[var(--site-color-primary)]"
+                    className={`px-1 py-1 text-sm font-semibold transition-colors duration-150 ${
+                      isActive
+                        ? "text-[var(--site-color-accent)]"
+                        : "text-slate-700 hover:text-[var(--site-color-accent)]"
                     }`}
                   >
                     {item.label}
-                    <span
-                      aria-hidden
-                      className={`absolute inset-x-0 -bottom-[2px] h-0.5 rounded-full bg-[var(--site-color-primary)] transition-transform duration-200 ${
-                        isActive ? "scale-x-100" : "scale-x-0 group-hover:scale-x-100"
-                      }`}
-                    />
                   </Link>
                 );
               })}
@@ -357,7 +355,13 @@ export function SiteHeader({
                     className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-700 transition duration-150 hover:bg-slate-200"
                   >
                     {accountUser.avatarUrl ? (
-                      <img src={accountUser.avatarUrl} alt={`${accountUser.username} avatar`} className="h-10 w-10 rounded-full object-cover" />
+                      <img
+                        src={accountUser.avatarUrl}
+                        alt={`${accountUser.username} avatar`}
+                        width={40}
+                        height={40}
+                        className="h-10 w-10 rounded-full object-cover"
+                      />
                     ) : (
                       <svg
                         xmlns="http://www.w3.org/2000/svg"

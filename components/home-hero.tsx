@@ -65,6 +65,7 @@ export function HomeHero({ slides, autoplayMs = 4500, showArrows = true, showDot
   const resolvedSlides = useMemo(() => (slides.length > 0 ? slides : fallbackSlides), [slides]);
   const [activeSlide, setActiveSlide] = useState(0);
   const currentSlide = activeSlide >= resolvedSlides.length ? 0 : activeSlide;
+  const nextSlide = resolvedSlides.length > 0 ? (currentSlide + 1) % resolvedSlides.length : 0;
 
   useEffect(() => {
     if (resolvedSlides.length <= 1) return undefined;
@@ -81,12 +82,12 @@ export function HomeHero({ slides, autoplayMs = 4500, showArrows = true, showDot
   return (
     <div
       id="home-slider"
-      className="relative min-h-[36rem] overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl md:min-h-[32rem]"
+      className="relative h-[44rem] overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl sm:h-[46rem] md:h-[38rem] lg:h-[34rem]"
     >
       {resolvedSlides.map((slide, index) => (
         <article
           key={slide.id || slide.title}
-          className={`absolute inset-0 grid gap-6 bg-gradient-to-br p-7 transition-opacity duration-700 md:grid-cols-2 md:p-10 ${
+          className={`absolute inset-0 grid gap-6 bg-gradient-to-br p-7 pb-24 transition-opacity duration-700 md:grid-cols-2 md:p-10 md:pb-8 ${
             index === currentSlide ? "opacity-100" : "pointer-events-none opacity-0"
           } ${presetClassByName[slide.gradientPreset] ?? presetClassByName.sunset}`}
         >
@@ -114,14 +115,28 @@ export function HomeHero({ slides, autoplayMs = 4500, showArrows = true, showDot
             </div>
           </div>
 
-          <div className="h-full rounded-2xl bg-white/70 p-4 backdrop-blur-sm">
-            <div className="relative h-full min-h-56 overflow-hidden rounded-2xl border border-white/70">
-              <div className="h-full w-full bg-cover bg-center" style={{ backgroundImage: `url('${slide.imageUrl}')` }} />
+          <div className="rounded-2xl bg-white/70 p-4 backdrop-blur-sm">
+            <div className="relative h-full min-h-44 overflow-hidden rounded-2xl border border-white/70 md:min-h-[19rem]">
+              {index === 0 || index === currentSlide || index === nextSlide ? (
+                <img
+                  src={slide.imageUrl}
+                  alt={slide.title || `Slide ${index + 1}`}
+                  width={1200}
+                  height={900}
+                  fetchPriority={index === 0 ? "high" : "auto"}
+                  loading={index === 0 ? "eager" : "lazy"}
+                  decoding="async"
+                  sizes="(min-width: 1024px) 40vw, (min-width: 768px) 45vw, 100vw"
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <div className="h-full w-full bg-slate-200/60" aria-hidden />
+              )}
               <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-slate-900/45 via-transparent to-transparent" />
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-3 md:col-span-2">
+          <div className="absolute inset-x-0 bottom-0 z-20 flex items-center justify-between gap-3 px-7 pb-6 md:relative md:inset-auto md:col-span-2 md:mt-auto md:px-0 md:pb-0">
             {showDots ? (
               <div className="flex gap-2">
                 {resolvedSlides.map((dotSlide, dotIndex) => (
@@ -145,14 +160,14 @@ export function HomeHero({ slides, autoplayMs = 4500, showArrows = true, showDot
                 <button
                   onClick={goPrev}
                   type="button"
-                  className="cursor-pointer rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+                  className="cursor-pointer rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-100 md:px-3 md:py-2 md:text-sm"
                 >
                   Previous
                 </button>
                 <button
                   onClick={goNext}
                   type="button"
-                  className="cursor-pointer rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+                  className="cursor-pointer rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-100 md:px-3 md:py-2 md:text-sm"
                 >
                   Next
                 </button>

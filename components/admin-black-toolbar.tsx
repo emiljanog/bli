@@ -75,42 +75,102 @@ const NEW_MENU: ToolbarLinkItem[] = [
 
 function getHomeDashboardMenu(role: AdminRole): ToolbarLinkItem[] {
   const isManager = role === "Manager";
-  const items: ToolbarLinkItem[] = [{ label: "Dashboard", href: "/dashboard" }];
+  const items: ToolbarLinkItem[] = [
+    {
+      label: "Dashboard",
+      href: "/dashboard",
+      icon: (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5">
+          <rect x="3" y="3" width="8" height="8" rx="1" />
+          <rect x="13" y="3" width="8" height="6" rx="1" />
+          <rect x="3" y="13" width="8" height="8" rx="1" />
+          <rect x="13" y="11" width="8" height="10" rx="1" />
+        </svg>
+      ),
+    },
+  ];
 
   if (!isManager) {
     items.push(
-      { label: "Pages", href: "/dashboard/pages" },
-      { label: "Slider", href: "/dashboard/slider" },
-      { label: "Media", href: "/dashboard/media" },
-      { label: "Tickets", href: "/dashboard/help-tickets" },
+      {
+        label: "Pages",
+        href: "/dashboard/pages",
+        icon: (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5">
+            <path d="M6 3h9l3 3v15H6z" />
+            <path d="M15 3v3h3" />
+          </svg>
+        ),
+      },
+      {
+        label: "Slider",
+        href: "/dashboard/slider",
+        icon: (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5">
+            <rect x="3" y="5" width="18" height="14" rx="2" />
+            <path d="M7 12h10" />
+          </svg>
+        ),
+      },
+      {
+        label: "Media",
+        href: "/dashboard/media",
+        icon: (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5">
+            <rect x="3" y="3" width="18" height="18" rx="2" />
+            <circle cx="8.5" cy="8.5" r="1.5" />
+            <path d="m21 15-5-5L5 21" />
+          </svg>
+        ),
+      },
+      {
+        label: "Tickets",
+        href: "/dashboard/help-tickets",
+        icon: (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+          </svg>
+        ),
+      },
     );
   }
 
-  items.push(
-    { label: "Products", href: "/dashboard/products" },
-    { label: "Orders", href: "/dashboard/orders" },
-    { label: "Categories", href: "/dashboard/categories" },
-    { label: "Tags", href: "/dashboard/tags" },
-    { label: "Sales", href: "/dashboard/sales" },
-    { label: "Coupons", href: "/dashboard/coupons" },
-    { label: "Reviews", href: "/dashboard/reviews" },
-  );
+  items.push({
+    label: "Store",
+    href: "/dashboard/products",
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5">
+        <path d="M3 7h18l-2 12H5L3 7z" />
+        <path d="M8 7V5a4 4 0 0 1 8 0v2" />
+      </svg>
+    ),
+  });
 
   if (canAccessSettings(role) && !isManager) {
-    items.push(
-      { label: "General", href: "/dashboard/settings/general" },
-      { label: "Page Layout", href: "/dashboard/settings/layout" },
-      { label: "Branding", href: "/dashboard/settings/brand" },
-      { label: "Payments", href: "/dashboard/settings/payments" },
-      { label: "Shipping", href: "/dashboard/settings/shipping" },
-      { label: "Emails", href: "/dashboard/settings/emails" },
-      { label: "Menu", href: "/dashboard/settings/menu" },
-      { label: "Security", href: "/dashboard/settings/security" },
-    );
+    items.push({
+      label: "Settings",
+      href: "/dashboard/settings/general",
+      icon: (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5">
+          <circle cx="12" cy="12" r="3" />
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01A1.65 1.65 0 0 0 10 3.09V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9v.01a1.65 1.65 0 0 0 1.51.99H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+        </svg>
+      ),
+    });
   }
 
   if (!isManager) {
-    items.push({ label: "Users", href: "/dashboard/users" });
+    items.push({
+      label: "Users",
+      href: "/dashboard/users",
+      icon: (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5">
+          <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+          <circle cx="8.5" cy="7" r="4" />
+          <path d="M17 11h6M20 8v6" />
+        </svg>
+      ),
+    });
   }
 
   return items;
