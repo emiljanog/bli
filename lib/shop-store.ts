@@ -1466,8 +1466,9 @@ function normalizeOrdersInPlace(orders: Order[]): void {
     order.customer = asSafeString(order.customer);
     order.userId = asSafeString(order.userId ?? "") || null;
 
-    const rawItems = Array.isArray((order as Partial<Order>).items)
-      ? (order as Partial<Order>).items
+    const orderItems = (order as Partial<Order>).items;
+    const rawItems = Array.isArray(orderItems)
+      ? orderItems
       : [];
     const normalizedItems = rawItems
       .map((item) => normalizeOrderItemRow(item, productPriceById))
