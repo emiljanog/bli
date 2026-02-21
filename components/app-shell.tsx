@@ -104,9 +104,9 @@ export function AppShell({ children, siteSettings, adminToolbar = null, accountU
           <ActionFeedbackToast />
         </Suspense>
         <div className="border-b border-slate-200 bg-white">
-          <div className="mx-auto w-[90%] max-w-[var(--site-layout-max-width)]">
+          <div className="site-container">
             <div className="grid grid-cols-2 items-center py-4">
-              <div className="px-4 sm:px-6 md:px-10">
+              <div>
                 <Link href="/" className="flex items-center gap-2">
                   {hasLogo ? (
                     <img
@@ -119,7 +119,7 @@ export function AppShell({ children, siteSettings, adminToolbar = null, accountU
                   )}
                 </Link>
               </div>
-              <div className="flex justify-end px-4 sm:px-6 md:px-10">
+              <div className="flex justify-end">
                 <Link
                   href="/cart"
                   aria-label="Cart"
@@ -136,8 +136,8 @@ export function AppShell({ children, siteSettings, adminToolbar = null, accountU
         </div>
         {children}
         <footer className="bg-white lg:bg-[linear-gradient(to_right,#ffffff_50%,#f5f5f5_50%)]">
-          <div className="mx-auto grid w-[90%] max-w-[var(--site-layout-max-width)] lg:grid-cols-2">
-            <div className="px-4 py-4 sm:px-6 md:px-10">
+          <div className="site-container grid lg:grid-cols-2">
+            <div className="py-4">
               <div className="w-full max-w-[640px] border-t border-slate-200 pt-4 text-center text-sm text-slate-600">
                 {siteSettings.siteTitle} Copyright (c) {year}
               </div>

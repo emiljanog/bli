@@ -220,7 +220,10 @@ export type SupportTicket = {
 export type SiteSettings = {
   siteTitle: string;
   brandName: string;
+  layoutWidthMode: SiteLayoutWidthMode;
   layoutMaxWidthPx: number;
+  layoutSideSpacingValue: number;
+  layoutSideSpacingUnit: SiteLayoutSpacingUnit;
   mediaUploadMaxMb: number;
   logoUrl: string;
   iconUrl: string;
@@ -268,6 +271,9 @@ export type SiteSettings = {
   shippingExpressPrice: number;
   shippingFreeThreshold: number;
 };
+
+export type SiteLayoutWidthMode = "full" | "boxedHidden" | "boxed" | "contentFull" | "wide1600" | "custom";
+export type SiteLayoutSpacingUnit = "px" | "percent" | "em" | "rem" | "vw";
 
 type ProductInput = {
   name: string;
@@ -469,9 +475,25 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function mergePersistedSettings(base: SiteSettings, input: unknown): SiteSettings {
   if (!isRecord(input)) return base;
   const draft = input as Partial<SiteSettings>;
+  const legacy = input as Record<string, unknown>;
+  const legacySidePaddingPercent = Number(legacy.layoutSidePaddingPercent);
+  const legacySidePaddingPx = Number(legacy.layoutSidePaddingPx);
+  const legacySidePaddingUnit =
+    typeof legacy.layoutSidePaddingUnit === "string" ? legacy.layoutSidePaddingUnit.trim().toLowerCase() : "";
+  const sideSpacingUnitFromLegacy: SiteLayoutSpacingUnit =
+    legacySidePaddingUnit === "px" ? "px" : "percent";
+  const sideSpacingValueFromLegacy =
+    sideSpacingUnitFromLegacy === "px"
+      ? (Number.isFinite(legacySidePaddingPx) ? legacySidePaddingPx : base.layoutSideSpacingValue)
+      : (Number.isFinite(legacySidePaddingPercent) ? legacySidePaddingPercent : base.layoutSideSpacingValue);
+
   return {
     ...base,
     ...draft,
+    layoutSideSpacingUnit: draft.layoutSideSpacingUnit ?? sideSpacingUnitFromLegacy ?? base.layoutSideSpacingUnit,
+    layoutSideSpacingValue: Number.isFinite(Number(draft.layoutSideSpacingValue))
+      ? Number(draft.layoutSideSpacingValue)
+      : sideSpacingValueFromLegacy,
     headerMenu: Array.isArray(draft.headerMenu) ? draft.headerMenu : base.headerMenu,
     homeSlides: Array.isArray(draft.homeSlides) ? draft.homeSlides : base.homeSlides,
   };
@@ -1054,7 +1076,10 @@ function defaultSiteSettings(): SiteSettings {
   return {
     siteTitle: "BLI Shop",
     brandName: "BLI",
+    layoutWidthMode: "custom",
     layoutMaxWidthPx: 1440,
+    layoutSideSpacingValue: 5,
+    layoutSideSpacingUnit: "percent",
     mediaUploadMaxMb: 10,
     logoUrl: "/logo.svg",
     iconUrl: "/favicon.ico",
@@ -1556,7 +1581,42 @@ function ensureProductMediaInLibraryInPlace(s: Store): void {
 function normalizeSiteSettingsInPlace(settings: SiteSettings): void {
   settings.siteTitle = asSafeString(settings.siteTitle) || "BLI Shop";
   settings.brandName = asSafeString(settings.brandName) || "BLI";
+  const layoutWidthMode = asSafeString(settings.layoutWidthMode).toLowerCase();
+  if (layoutWidthMode === "full") {
+    settings.layoutWidthMode = "full";
+  } else if (layoutWidthMode === "boxedhidden") {
+    settings.layoutWidthMode = "boxedHidden";
+  } else if (layoutWidthMode === "boxed") {
+    settings.layoutWidthMode = "boxed";
+  } else if (layoutWidthMode === "contentfull") {
+    settings.layoutWidthMode = "contentFull";
+  } else if (layoutWidthMode === "wide1600") {
+    settings.layoutWidthMode = "wide1600";
+  } else {
+    settings.layoutWidthMode = "custom";
+  }
   settings.layoutMaxWidthPx = clampInt(settings.layoutMaxWidthPx, 960, 2400) || 1440;
+  const sideSpacingUnit = asSafeString(settings.layoutSideSpacingUnit).toLowerCase();
+  if (
+    sideSpacingUnit !== "px" &&
+    sideSpacingUnit !== "percent" &&
+    sideSpacingUnit !== "em" &&
+    sideSpacingUnit !== "rem" &&
+    sideSpacingUnit !== "vw"
+  ) {
+    settings.layoutSideSpacingUnit = "percent";
+  }
+  const parsedSideSpacingValue = Number(settings.layoutSideSpacingValue);
+  const safeSideSpacingValue = Number.isFinite(parsedSideSpacingValue) ? parsedSideSpacingValue : 5;
+  const sideSpacingMax =
+    settings.layoutSideSpacingUnit === "px"
+      ? 240
+      : settings.layoutSideSpacingUnit === "percent"
+        ? 20
+        : settings.layoutSideSpacingUnit === "vw"
+          ? 20
+          : 10;
+  settings.layoutSideSpacingValue = Number(Math.min(sideSpacingMax, Math.max(0, safeSideSpacingValue)).toFixed(2));
   const parsedMediaUploadMaxMb = Number(settings.mediaUploadMaxMb);
   settings.mediaUploadMaxMb = Number.isFinite(parsedMediaUploadMaxMb)
     ? clampInt(parsedMediaUploadMaxMb, 1, 100)
@@ -3431,8 +3491,18 @@ export function updateSiteSettings(input: Partial<SiteSettings>): SiteSettings {
   if (input.brandName !== undefined) {
     target.brandName = asSafeString(input.brandName);
   }
+  if (input.layoutWidthMode !== undefined) {
+    target.layoutWidthMode = input.layoutWidthMode;
+  }
   if (input.layoutMaxWidthPx !== undefined) {
     target.layoutMaxWidthPx = Math.max(0, Math.floor(Number(input.layoutMaxWidthPx) || 0));
+  }
+  if (input.layoutSideSpacingUnit !== undefined) {
+    target.layoutSideSpacingUnit = input.layoutSideSpacingUnit;
+  }
+  if (input.layoutSideSpacingValue !== undefined) {
+    const parsed = Number(input.layoutSideSpacingValue);
+    target.layoutSideSpacingValue = Number.isFinite(parsed) ? parsed : 0;
   }
   if (input.mediaUploadMaxMb !== undefined) {
     target.mediaUploadMaxMb = Math.max(1, Math.floor(Number(input.mediaUploadMaxMb) || 1));

@@ -9,6 +9,8 @@
   --site-font-button: var(--font-geist-sans), sans-serif;
   --site-font-ui: var(--font-geist-sans), sans-serif;
   --site-layout-max-width: 1440px;
+  --site-layout-side-space-inline: 5%;
+  --site-layout-overflow-x: visible;
   --site-color-primary: #ff8a00;
   --site-color-secondary: #0f172a;
   --site-color-accent: #2ea2cc;
@@ -106,6 +108,7 @@ body {
   background: var(--app-bg, var(--site-color-bg, var(--background)));
   color: var(--foreground);
   font-family: var(--site-font-text, var(--font-geist-sans), sans-serif);
+  overflow-x: var(--site-layout-overflow-x, visible);
 }
 
 h1,
@@ -125,6 +128,14 @@ input,
 select,
 textarea {
   font-family: var(--site-font-ui, var(--site-font-text));
+}
+
+.site-container {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: var(--site-layout-max-width);
+  margin-inline: auto;
+  padding-inline: var(--site-layout-side-space-inline);
 }
 
 .site-primary-bg {

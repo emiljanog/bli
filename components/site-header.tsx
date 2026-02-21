@@ -269,7 +269,7 @@ export function SiteHeader({
 
   return (
     <div className="sticky z-[110]" style={{ top: `${Math.max(0, Math.floor(topOffsetPx))}px` }}>
-      <div className="mx-auto w-[90%] max-w-[var(--site-layout-max-width)] pt-2">
+      <div className="site-container pt-2">
         <header
           className={`rounded-2xl border transition-all duration-300 ${
             isScrolled

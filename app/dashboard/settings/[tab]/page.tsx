@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { AdminShell } from "@/components/admin-shell";
 import { BrandColorField } from "@/components/brand-color-field";
+import { PageLayoutWidthField } from "@/components/page-layout-width-field";
 import { SettingsMenuEditor } from "@/components/settings-menu-editor";
 import { UploadField } from "@/components/upload-field";
 import {
@@ -12,6 +13,7 @@ import {
   updateCheckoutShippingSettingsAction,
   updateEmailSettingsAction,
   updateMenuSettingsAction,
+  updatePageLayoutSettingsAction,
 } from "@/app/dashboard/actions";
 import { canAccessSettings, getAdminRoleFromCookieStore, getAdminUsernameFromCookieStore } from "@/lib/admin-auth";
 import { SETTINGS_TABS, getSettingsTab, type SettingsTabSlug } from "@/app/dashboard/settings/settings-tabs";
@@ -82,6 +84,9 @@ export default async function AdminSettingsTabPage({ params }: AdminSettingsTabP
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
   }));
+  const sideSpacingOptions = ["0", "2", "4", "5", "8", "10", "12", "16", "20", "24", "32", "40"];
+  const currentSideSpacingValue = String(siteSettings.layoutSideSpacingValue);
+  const showCurrentSideSpacingValue = !sideSpacingOptions.includes(currentSideSpacingValue);
 
   return (
     <AdminShell title="Settings" description="Configure your store, website and system preferences.">
@@ -134,23 +139,6 @@ export default async function AdminSettingsTabPage({ params }: AdminSettingsTabP
                 />
                 <span className="block text-xs text-slate-500">
                   In a few words, explain what this site is about.
-                </span>
-              </label>
-              <label className="space-y-1">
-                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Site Max Width (px)
-                </span>
-                <input
-                  name="layoutMaxWidthPx"
-                  type="number"
-                  min={960}
-                  max={2400}
-                  step={10}
-                  defaultValue={siteSettings.layoutMaxWidthPx}
-                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
-                />
-                <span className="block text-xs text-slate-500">
-                  This width is used by all public pages for main content containers.
                 </span>
               </label>
               <label className="space-y-1">
@@ -247,6 +235,99 @@ export default async function AdminSettingsTabPage({ params }: AdminSettingsTabP
                 className="rounded-xl site-primary-bg px-4 py-2 text-sm font-semibold text-white transition site-primary-bg-hover"
               >
                 Save General Settings
+              </button>
+            </div>
+          </form>
+        ) : active.slug === "layout" ? (
+          <form action={updatePageLayoutSettingsAction} className="mt-5 space-y-5">
+            <div className="grid gap-4 md:grid-cols-[1fr_320px]">
+              <div className="space-y-1">
+                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Site Width</span>
+                <p className="text-sm text-slate-600">
+                  You can make your content wrapper boxed or full width.
+                </p>
+              </div>
+              <label className="space-y-1">
+                <select
+                  name="layoutWidthMode"
+                  defaultValue={siteSettings.layoutWidthMode}
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+                >
+                  <option value="full">Full width</option>
+                  <option value="boxedHidden">Boxed (with hidden overflow)</option>
+                  <option value="boxed">Boxed</option>
+                  <option value="contentFull">Content full width</option>
+                  <option value="wide1600">Wide (1600 px)</option>
+                  <option value="custom">Custom</option>
+                </select>
+              </label>
+            </div>
+
+            <div className="rounded-xl border border-slate-200 p-4">
+              <PageLayoutWidthField name="layoutMaxWidthPx" defaultValue={siteSettings.layoutMaxWidthPx} />
+              <span className="mt-1 block text-xs text-slate-500">Used when Site Width is set to Custom.</span>
+            </div>
+
+            <div className="rounded-xl border border-slate-200 p-4">
+              <div className="grid gap-4 md:grid-cols-[1fr_180px_180px]">
+                <label className="space-y-1">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Side Space (left/right)
+                  </span>
+                  <select
+                    name="layoutSideSpacingValue"
+                    defaultValue={siteSettings.layoutSideSpacingValue}
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+                  >
+                    {showCurrentSideSpacingValue ? (
+                      <option value={currentSideSpacingValue}>{currentSideSpacingValue}</option>
+                    ) : null}
+                    <option value="0">0</option>
+                    <option value="2">2</option>
+                    <option value="4">4</option>
+                    <option value="5">5</option>
+                    <option value="8">8</option>
+                    <option value="10">10</option>
+                    <option value="12">12</option>
+                    <option value="16">16</option>
+                    <option value="20">20</option>
+                    <option value="24">24</option>
+                    <option value="32">32</option>
+                    <option value="40">40</option>
+                  </select>
+                  <span className="block text-xs text-slate-500">
+                    This adds horizontal space even when width is full.
+                  </span>
+                </label>
+                <label className="space-y-1">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Unit</span>
+                  <select
+                    name="layoutSideSpacingUnit"
+                    defaultValue={siteSettings.layoutSideSpacingUnit}
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+                  >
+                    <option value="px">px</option>
+                    <option value="percent">%</option>
+                    <option value="em">em</option>
+                    <option value="rem">rem</option>
+                    <option value="vw">vw</option>
+                  </select>
+                </label>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                  <p className="font-semibold">Examples</p>
+                  <p>10px, 5%, 1.5rem</p>
+                </div>
+              </div>
+            </div>
+
+            <input type="hidden" name="redirectTo" value={tabHref(active.slug)} />
+
+            <div className="flex justify-start py-2">
+              <button
+                type="submit"
+                className="rounded-xl site-primary-bg px-4 py-2 text-sm font-semibold text-white transition site-primary-bg-hover"
+              >
+                Save Page Layout
               </button>
             </div>
           </form>

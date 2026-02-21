@@ -27,7 +27,7 @@ export default function Home() {
 
   return (
     <main className="text-slate-900">
-      <section className="mx-auto w-[90%] max-w-[var(--site-layout-max-width)] py-10 md:py-14">
+      <section className="site-container py-10 md:py-14">
         <HomeHero
           slides={siteSettings.homeSlides}
           autoplayMs={siteSettings.sliderAutoplayMs}

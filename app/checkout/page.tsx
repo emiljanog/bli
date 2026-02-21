@@ -410,7 +410,7 @@ export default function CheckoutPage() {
 
   return (
     <main className="min-h-screen overflow-x-clip bg-white text-slate-900 lg:bg-[linear-gradient(to_right,#ffffff_50%,#f5f5f5_50%)]">
-      <section className="mx-auto grid w-[90%] max-w-[var(--site-layout-max-width)] lg:min-h-screen lg:grid-cols-2 lg:items-start">
+      <section className="site-container grid lg:min-h-screen lg:grid-cols-2 lg:items-start">
         <form id="checkout-form" action={handleSubmit} className="min-w-0 bg-white px-4 py-6 sm:px-6 sm:py-8 md:px-10 md:py-10">
           <div className="w-full max-w-[640px] space-y-8">
             <section>
@@ -881,5 +881,4 @@ export default function CheckoutPage() {
     </main>
   );
 }
-
 

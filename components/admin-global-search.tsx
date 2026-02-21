@@ -22,7 +22,8 @@ const SEARCH_TARGETS: SearchTarget[] = [
   { label: "Help Tickets", href: "/dashboard/help-tickets", keywords: ["help", "ticket", "support"] },
   { label: "Coupons", href: "/dashboard/coupons", keywords: ["coupon", "discount"] },
   { label: "Reviews", href: "/dashboard/reviews", keywords: ["reviews", "ratings"] },
-  { label: "Settings", href: "/dashboard/settings/general", keywords: ["settings", "general", "brand"] },
+  { label: "Settings", href: "/dashboard/settings/general", keywords: ["settings", "general", "brand", "layout"] },
+  { label: "Page Layout", href: "/dashboard/settings/layout", keywords: ["layout", "width", "full width", "boxed"] },
 ];
 
 function scoreTarget(target: SearchTarget, query: string): number {

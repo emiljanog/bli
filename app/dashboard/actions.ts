@@ -59,6 +59,8 @@ import {
   type HomeSliderItem,
   type Product,
   type ReviewStatus,
+  type SiteLayoutSpacingUnit,
+  type SiteLayoutWidthMode,
   type UserRole,
   restoreMedia,
   restorePage,
@@ -108,6 +110,25 @@ function asEmailProvider(input: FormDataEntryValue | null): EmailProvider {
   if (value === "phpmailer") return "phpmailer";
   if (value === "react-email") return "react-email";
   return "smtp";
+}
+
+function asSiteLayoutWidthMode(input: FormDataEntryValue | null): SiteLayoutWidthMode {
+  const value = asString(input).toLowerCase();
+  if (value === "full") return "full";
+  if (value === "boxedhidden") return "boxedHidden";
+  if (value === "boxed") return "boxed";
+  if (value === "contentfull") return "contentFull";
+  if (value === "wide1600") return "wide1600";
+  return "custom";
+}
+
+function asSiteLayoutSpacingUnit(input: FormDataEntryValue | null): SiteLayoutSpacingUnit {
+  const value = asString(input).toLowerCase();
+  if (value === "px") return "px";
+  if (value === "em") return "em";
+  if (value === "rem") return "rem";
+  if (value === "vw") return "vw";
+  return "percent";
 }
 
 function asPublicationStatus(input: FormDataEntryValue | null, fallback: PublicationStatus = "Draft"): PublicationStatus {
@@ -852,7 +873,6 @@ export async function logoutAdminAction() {
 export async function updateBrandingSettingsAction(formData: FormData) {
   const siteTitle = asString(formData.get("siteTitle"));
   const brandName = asString(formData.get("brandName"));
-  const layoutMaxWidthPx = asInteger(formData.get("layoutMaxWidthPx"), 1440);
   const mediaUploadMaxMb = asInteger(formData.get("mediaUploadMaxMb"), 10);
   const logoUrlInput = asString(formData.get("logoUrl"));
   const iconUrlInput = asString(formData.get("iconUrl"));
@@ -871,7 +891,6 @@ export async function updateBrandingSettingsAction(formData: FormData) {
   updateSiteSettings({
     siteTitle,
     brandName,
-    layoutMaxWidthPx,
     mediaUploadMaxMb,
     useLogoOnly: Boolean(finalLogoUrl),
     logoUrl: finalLogoUrl,
@@ -889,6 +908,34 @@ export async function updateBrandingSettingsAction(formData: FormData) {
   revalidateAdminPath("/admin/media");
   revalidateAdminPath("/admin/settings");
   revalidateAdminPath("/admin/settings/general");
+
+  redirectToAdminDestination(redirectTo);
+}
+
+export async function updatePageLayoutSettingsAction(formData: FormData) {
+  const redirectTo = asLastString(formData.getAll("redirectTo"));
+  const layoutWidthMode = asSiteLayoutWidthMode(formData.get("layoutWidthMode"));
+  const layoutMaxWidthPx = asInteger(formData.get("layoutMaxWidthPx"), 1440);
+  const layoutSideSpacingUnit = asSiteLayoutSpacingUnit(formData.get("layoutSideSpacingUnit"));
+  const parsedSideSpacing = Number(asString(formData.get("layoutSideSpacingValue")));
+  const layoutSideSpacingValue = Number.isFinite(parsedSideSpacing) ? parsedSideSpacing : 5;
+
+  updateSiteSettings({
+    layoutWidthMode,
+    layoutMaxWidthPx,
+    layoutSideSpacingUnit,
+    layoutSideSpacingValue,
+  });
+
+  revalidatePath("/", "layout");
+  revalidatePath("/");
+  revalidatePath("/shop");
+  revalidatePath("/product");
+  revalidatePath("/my-account");
+  revalidatePath("/login");
+  revalidateAdminPath("/admin");
+  revalidateAdminPath("/admin/settings");
+  revalidateAdminPath("/admin/settings/layout");
 
   redirectToAdminDestination(redirectTo);
 }

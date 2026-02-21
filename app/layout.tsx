@@ -32,6 +32,27 @@ function withFallback(value: unknown, fallback: string): string {
   return safe || fallback;
 }
 
+function getLayoutMaxWidth(settings: ReturnType<typeof getSiteSettings>): string {
+  if (settings.layoutWidthMode === "full" || settings.layoutWidthMode === "contentFull") return "none";
+  if (settings.layoutWidthMode === "boxedHidden" || settings.layoutWidthMode === "boxed") return "1280px";
+  if (settings.layoutWidthMode === "wide1600") return "1600px";
+  return `${Math.max(960, Math.min(2400, Number(settings.layoutMaxWidthPx) || 1440))}px`;
+}
+
+function getLayoutSideSpacing(settings: ReturnType<typeof getSiteSettings>): string {
+  const value = Number.isFinite(Number(settings.layoutSideSpacingValue)) ? Number(settings.layoutSideSpacingValue) : 5;
+  const safeValue = Math.max(0, value);
+  if (settings.layoutSideSpacingUnit === "px") return `${Math.min(240, safeValue)}px`;
+  if (settings.layoutSideSpacingUnit === "em") return `${Math.min(10, safeValue)}em`;
+  if (settings.layoutSideSpacingUnit === "rem") return `${Math.min(10, safeValue)}rem`;
+  if (settings.layoutSideSpacingUnit === "vw") return `${Math.min(20, safeValue)}vw`;
+  return `${Math.min(20, safeValue)}%`;
+}
+
+function getLayoutOverflowX(settings: ReturnType<typeof getSiteSettings>): string {
+  return settings.layoutWidthMode === "boxedHidden" ? "hidden" : "visible";
+}
+
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -121,7 +142,9 @@ export default async function RootLayout({
     "--site-font-text": withFallback(siteSettings.textFont, "var(--font-geist-sans), sans-serif"),
     "--site-font-button": withFallback(siteSettings.buttonFont, "var(--font-geist-sans), sans-serif"),
     "--site-font-ui": withFallback(siteSettings.uiFont, "var(--font-geist-sans), sans-serif"),
-    "--site-layout-max-width": `${Math.max(960, Math.min(2400, Number(siteSettings.layoutMaxWidthPx) || 1440))}px`,
+    "--site-layout-max-width": getLayoutMaxWidth(siteSettings),
+    "--site-layout-side-space-inline": getLayoutSideSpacing(siteSettings),
+    "--site-layout-overflow-x": getLayoutOverflowX(siteSettings),
     "--site-color-primary": withFallback(siteSettings.primaryColor, "#ff8a00"),
     "--site-color-secondary": withFallback(siteSettings.secondaryColor, "#0f172a"),
     "--site-color-accent": withFallback(siteSettings.accentColor, "#2ea2cc"),

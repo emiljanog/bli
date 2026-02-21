@@ -32,7 +32,7 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
 
   return (
     <main className="text-slate-900">
-      <section className="mx-auto w-[90%] max-w-[var(--site-layout-max-width)] py-10 md:py-14">
+      <section className="site-container py-10 md:py-14">
         <div className="mb-8 rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
           <p className="text-sm font-medium text-slate-500">Shop</p>
           <h1 className="mt-2 text-4xl font-bold">Produktet tona</h1>

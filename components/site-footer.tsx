@@ -10,7 +10,7 @@ const footerLinks = [
 export function SiteFooter() {
   return (
     <footer className="mt-16 border-t border-slate-200 bg-white">
-      <div className="mx-auto grid w-[90%] max-w-[var(--site-layout-max-width)] gap-8 py-10 md:grid-cols-3">
+      <div className="site-container grid gap-8 py-10 md:grid-cols-3">
         <div className="space-y-2">
           <p className="text-lg font-bold text-slate-900">BLI Shop</p>
           <p className="max-w-sm text-sm text-slate-600">

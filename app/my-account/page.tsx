@@ -65,7 +65,7 @@ export default async function MyAccountPage({ searchParams }: MyAccountPageProps
 
   return (
     <main className="text-slate-900">
-      <section className="mx-auto w-[90%] max-w-[var(--site-layout-max-width)] py-10 md:py-14">
+      <section className="site-container py-10 md:py-14">
         <article className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:p-8">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>

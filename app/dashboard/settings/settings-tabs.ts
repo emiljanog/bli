@@ -1,5 +1,6 @@
 export type SettingsTabSlug =
   | "general"
+  | "layout"
   | "brand"
   | "payments"
   | "shipping"
@@ -19,9 +20,16 @@ export const SETTINGS_TABS: SettingsTabItem[] = [
   {
     slug: "general",
     label: "General",
-    title: "General & Branding",
-    description: "Website title, brand identity, logo, and favicon settings.",
+    title: "General Branding",
+    description: "Website title, brand identity, logo, favicon, and upload limits.",
     group: "Store",
+  },
+  {
+    slug: "layout",
+    label: "Page Layout",
+    title: "Page Layout & Content Width",
+    description: "Control website content wrapper width mode and side spacing units.",
+    group: "Website",
   },
   {
     slug: "brand",

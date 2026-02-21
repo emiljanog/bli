@@ -86,7 +86,7 @@ export function HomeHero({ slides, autoplayMs = 4500, showArrows = true, showDot
       {resolvedSlides.map((slide, index) => (
         <article
           key={slide.id || slide.title}
-          className={`absolute inset-0 grid gap-6 bg-gradient-to-br p-7 pb-24 transition-opacity duration-700 md:grid-cols-2 md:p-10 md:pb-24 ${
+          className={`absolute inset-0 grid gap-6 bg-gradient-to-br p-7 transition-opacity duration-700 md:grid-cols-2 md:p-10 ${
             index === currentSlide ? "opacity-100" : "pointer-events-none opacity-0"
           } ${presetClassByName[slide.gradientPreset] ?? presetClassByName.sunset}`}
         >
@@ -120,47 +120,47 @@ export function HomeHero({ slides, autoplayMs = 4500, showArrows = true, showDot
               <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-slate-900/45 via-transparent to-transparent" />
             </div>
           </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-3 md:col-span-2">
+            {showDots ? (
+              <div className="flex gap-2">
+                {resolvedSlides.map((dotSlide, dotIndex) => (
+                  <button
+                    key={`${dotSlide.id}-dot`}
+                    onClick={() => setActiveSlide(dotIndex)}
+                    type="button"
+                    className={`h-2.5 cursor-pointer rounded-full transition-all ${
+                      dotIndex === currentSlide ? "site-primary-bg w-8" : "w-2.5 bg-slate-400/70"
+                    }`}
+                    aria-label={`Shko te slide ${dotIndex + 1}`}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div />
+            )}
+
+            {showArrows ? (
+              <div className="flex gap-2">
+                <button
+                  onClick={goPrev}
+                  type="button"
+                  className="cursor-pointer rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+                >
+                  Previous
+                </button>
+                <button
+                  onClick={goNext}
+                  type="button"
+                  className="cursor-pointer rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+                >
+                  Next
+                </button>
+              </div>
+            ) : null}
+          </div>
         </article>
       ))}
-
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex items-center justify-between px-6 pb-6 md:px-10">
-        {showDots ? (
-          <div className="flex gap-2">
-            {resolvedSlides.map((slide, index) => (
-              <button
-                key={`${slide.id}-dot`}
-                onClick={() => setActiveSlide(index)}
-                type="button"
-                className={`pointer-events-auto h-2.5 rounded-full transition-all ${
-                  index === currentSlide ? "site-primary-bg w-8" : "w-2.5 bg-slate-400/70"
-                }`}
-                aria-label={`Shko te slide ${index + 1}`}
-              />
-            ))}
-          </div>
-        ) : (
-          <div />
-        )}
-
-        {showArrows ? (
-          <div className="flex gap-2">
-            <button
-              onClick={goPrev}
-              type="button"
-              className="pointer-events-auto rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
-            >
-              Previous
-            </button>
-            <button
-              onClick={goNext}
-              type="button"
-              className="pointer-events-auto rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
-            >
-              Next
-            </button>
-          </div>
-        ) : null}
-      </div>
     </div>
   );
 }

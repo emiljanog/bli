@@ -99,6 +99,7 @@ function getHomeDashboardMenu(role: AdminRole): ToolbarLinkItem[] {
   if (canAccessSettings(role) && !isManager) {
     items.push(
       { label: "General", href: "/dashboard/settings/general" },
+      { label: "Page Layout", href: "/dashboard/settings/layout" },
       { label: "Branding", href: "/dashboard/settings/brand" },
       { label: "Payments", href: "/dashboard/settings/payments" },
       { label: "Shipping", href: "/dashboard/settings/shipping" },
