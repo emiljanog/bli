@@ -53,7 +53,6 @@ function isMenuItemActive(pathname: string, href: string): boolean {
 export function SiteHeader({
   siteSettings,
   accountUser = null,
-  topOffsetPx = 0,
 }: SiteHeaderProps) {
   const pathname = usePathname();
   const router = useRouter();
@@ -281,15 +280,16 @@ export function SiteHeader({
   }
 
   return (
-    <div className="sticky z-[110]" style={{ top: `${Math.max(0, Math.floor(topOffsetPx))}px` }}>
-      <div className="site-container pt-2">
+    <div className="sticky z-[110]" style={{ top: "0px" }}>
+      <div className="w-full">
         <header
-          className={`rounded-2xl border transition-all duration-300 ${
+          className={`border transition-all duration-300 ${
             isScrolled
               ? "border-white/40 bg-white/55 shadow-lg shadow-slate-300/35 backdrop-blur-xl"
               : "border-slate-200/90 bg-white/95 shadow-sm backdrop-blur"
           }`}
         >
+          <div className="site-container">
           <div className="flex items-center justify-between gap-3 px-4 py-3 md:px-6">
             <Link href="/" className="flex items-center gap-2">
               {hasLogo ? (
@@ -632,6 +632,7 @@ export function SiteHeader({
               </div>
             </div>
           </nav>
+          </div>
         </header>
       </div>
       <SiteCartDrawer

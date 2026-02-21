@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { type MouseEvent, type PointerEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   type CartItem,
   readCart,
@@ -40,6 +40,8 @@ export function SiteCartDrawer({ open, onClose, isLoggedIn }: SiteCartDrawerProp
   const [items, setItems] = useState<CartItem[]>([]);
   const [recommendations, setRecommendations] = useState<TopProduct[]>([]);
   const [recommendationLoading, setRecommendationLoading] = useState(false);
+  const [recommendationPosition, setRecommendationPosition] = useState(0);
+  const [isRecommendationSwiping, setIsRecommendationSwiping] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [instructionsOpen, setInstructionsOpen] = useState(false);
   const [discountOpen, setDiscountOpen] = useState(false);
@@ -52,6 +54,12 @@ export function SiteCartDrawer({ open, onClose, isLoggedIn }: SiteCartDrawerProp
     discount: number;
     description: string;
   } | null>(null);
+  const recommendationScrollerRef = useRef<HTMLDivElement | null>(null);
+  const recommendationPointerIdRef = useRef<number | null>(null);
+  const recommendationSwipeStartXRef = useRef(0);
+  const recommendationSwipeStartScrollLeftRef = useRef(0);
+  const recommendationDidDragRef = useRef(false);
+  const recommendationSuppressClickRef = useRef(false);
 
   useEffect(() => {
     let canceled = false;
@@ -99,7 +107,7 @@ export function SiteCartDrawer({ open, onClose, isLoggedIn }: SiteCartDrawerProp
     const loadRecommendations = async () => {
       setRecommendationLoading(true);
       try {
-        const response = await fetch("/api/products/top?limit=3", {
+        const response = await fetch("/api/products/top?limit=5", {
           method: "GET",
           signal: controller.signal,
           cache: "no-store",
@@ -107,7 +115,7 @@ export function SiteCartDrawer({ open, onClose, isLoggedIn }: SiteCartDrawerProp
         if (!response.ok) return;
         const payload = (await response.json()) as { products?: TopProduct[] };
         if (!canceled) {
-          setRecommendations(Array.isArray(payload.products) ? payload.products : []);
+          setRecommendations(Array.isArray(payload.products) ? payload.products.slice(0, 5) : []);
         }
       } catch {
         if (!canceled) {
@@ -127,6 +135,14 @@ export function SiteCartDrawer({ open, onClose, isLoggedIn }: SiteCartDrawerProp
       controller.abort();
     };
   }, [open, items.length, recommendations.length]);
+
+  useEffect(() => {
+    setRecommendationPosition(0);
+    const scroller = recommendationScrollerRef.current;
+    if (scroller) {
+      scroller.scrollLeft = 0;
+    }
+  }, [recommendations]);
 
   useEffect(() => {
     if (!open) return;
@@ -158,6 +174,10 @@ export function SiteCartDrawer({ open, onClose, isLoggedIn }: SiteCartDrawerProp
     () => items.reduce((sum, item) => sum + item.price * item.quantity, 0),
     [items],
   );
+  const visibleRecommendationsCount = 3;
+  const recommendationGapPx = 8;
+  const canSlideRecommendations = recommendations.length > visibleRecommendationsCount;
+  const maxRecommendationPosition = Math.max(0, recommendations.length - visibleRecommendationsCount);
   const discountAmount = Math.min(subtotal, couponApplied?.discount ?? 0);
   const checkoutTotal = Math.max(0, subtotal - discountAmount);
   const appliedCouponCode = couponApplied?.code ?? "";
@@ -215,6 +235,129 @@ export function SiteCartDrawer({ open, onClose, isLoggedIn }: SiteCartDrawerProp
 
   const remainingForFreeShipping = Math.max(0, FREE_SHIPPING_TARGET - subtotal);
   const shippingProgress = Math.max(0, Math.min(100, Math.round((subtotal / FREE_SHIPPING_TARGET) * 100)));
+  const recommendationSwipeMovePx = 8;
+
+  const getRecommendationStepPx = () => {
+    const scroller = recommendationScrollerRef.current;
+    if (!scroller) return 1;
+    const cardWidth = (scroller.clientWidth - recommendationGapPx * (visibleRecommendationsCount - 1)) / visibleRecommendationsCount;
+    return cardWidth + recommendationGapPx;
+  };
+
+  const clampRecommendationPosition = (position: number) => Math.max(0, Math.min(maxRecommendationPosition, position));
+
+  const scrollRecommendationsTo = (position: number, behavior: ScrollBehavior) => {
+    const scroller = recommendationScrollerRef.current;
+    if (!scroller) return;
+    const next = clampRecommendationPosition(position);
+    const step = getRecommendationStepPx();
+    scroller.scrollTo({ left: next * step, behavior });
+    setRecommendationPosition(next);
+  };
+
+  const syncRecommendationPositionFromScroll = () => {
+    const scroller = recommendationScrollerRef.current;
+    if (!scroller) return;
+    if (!canSlideRecommendations) {
+      setRecommendationPosition(0);
+      return;
+    }
+    const step = getRecommendationStepPx();
+    const rawPosition = step > 0 ? scroller.scrollLeft / step : 0;
+    setRecommendationPosition(clampRecommendationPosition(Math.round(rawPosition)));
+  };
+
+  const slideRecommendationsPrev = () => {
+    if (!canSlideRecommendations) return;
+    const previousPosition = recommendationPosition <= 0 ? maxRecommendationPosition : recommendationPosition - 1;
+    scrollRecommendationsTo(previousPosition, "smooth");
+  };
+
+  const slideRecommendationsNext = () => {
+    if (!canSlideRecommendations) return;
+    const nextPosition = recommendationPosition >= maxRecommendationPosition ? 0 : recommendationPosition + 1;
+    scrollRecommendationsTo(nextPosition, "smooth");
+  };
+
+  const finishRecommendationSwipe = (pointerId?: number) => {
+    if (pointerId !== undefined && recommendationPointerIdRef.current !== pointerId) return;
+    const scroller = recommendationScrollerRef.current;
+    const didDrag = recommendationDidDragRef.current;
+    recommendationPointerIdRef.current = null;
+    recommendationSwipeStartXRef.current = 0;
+    recommendationSwipeStartScrollLeftRef.current = 0;
+    recommendationDidDragRef.current = false;
+    setIsRecommendationSwiping(false);
+    if (didDrag) {
+      recommendationSuppressClickRef.current = true;
+    }
+    if (!canSlideRecommendations || !scroller) return;
+    const step = getRecommendationStepPx();
+    const target = clampRecommendationPosition(Math.round(scroller.scrollLeft / step));
+    scrollRecommendationsTo(target, "smooth");
+  };
+
+  const handleRecommendationScroll = () => {
+    if (recommendationPointerIdRef.current !== null) return;
+    syncRecommendationPositionFromScroll();
+  };
+
+  const handleRecommendationDotClick = (position: number) => {
+    scrollRecommendationsTo(position, "smooth");
+  };
+
+  useEffect(() => {
+    if (!canSlideRecommendations && recommendationPosition !== 0) {
+      setRecommendationPosition(0);
+      return;
+    }
+    if (recommendationPosition > maxRecommendationPosition) {
+      setRecommendationPosition(maxRecommendationPosition);
+    }
+  }, [canSlideRecommendations, maxRecommendationPosition, recommendationPosition]);
+
+  const handleRecommendationPointerDown = (event: PointerEvent<HTMLDivElement>) => {
+    if (!canSlideRecommendations) return;
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    const scroller = recommendationScrollerRef.current;
+    if (!scroller) return;
+    recommendationSuppressClickRef.current = false;
+    recommendationDidDragRef.current = false;
+    recommendationPointerIdRef.current = event.pointerId;
+    recommendationSwipeStartXRef.current = event.clientX;
+    recommendationSwipeStartScrollLeftRef.current = scroller.scrollLeft;
+    setIsRecommendationSwiping(true);
+  };
+
+  const handleRecommendationPointerMove = (event: PointerEvent<HTMLDivElement>) => {
+    if (recommendationPointerIdRef.current !== event.pointerId) return;
+    const scroller = recommendationScrollerRef.current;
+    if (!scroller) return;
+    const deltaX = event.clientX - recommendationSwipeStartXRef.current;
+    if (Math.abs(deltaX) > recommendationSwipeMovePx) {
+      recommendationDidDragRef.current = true;
+    }
+    scroller.scrollLeft = recommendationSwipeStartScrollLeftRef.current - deltaX;
+  };
+
+  const handleRecommendationPointerUp = (event: PointerEvent<HTMLDivElement>) => {
+    finishRecommendationSwipe(event.pointerId);
+  };
+
+  const handleRecommendationPointerCancel = (event: PointerEvent<HTMLDivElement>) => {
+    finishRecommendationSwipe(event.pointerId);
+  };
+
+  const handleRecommendationCardClick = (event: MouseEvent<HTMLAnchorElement>) => {
+    if (recommendationSuppressClickRef.current) {
+      recommendationSuppressClickRef.current = false;
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+    recommendationSuppressClickRef.current = false;
+    window.setTimeout(onClose, 0);
+  };
 
   const handleDecrease = async (itemId: string, quantity: number) => {
     const next = await updateCartItemQuantity(itemId, Math.max(1, quantity - 1));
@@ -285,7 +428,7 @@ export function SiteCartDrawer({ open, onClose, isLoggedIn }: SiteCartDrawerProp
     >
       <button
         type="button"
-        aria-label="Close cart drawer overlay"
+        aria-label="Mbyll sfondin e shportes"
         onClick={onClose}
         className={`absolute inset-0 bg-slate-900/35 transition ${open ? "opacity-100" : "opacity-0"}`}
       />
@@ -293,16 +436,15 @@ export function SiteCartDrawer({ open, onClose, isLoggedIn }: SiteCartDrawerProp
       <aside
         role="dialog"
         aria-modal="true"
-        aria-label="Your Cart"
-        className={`absolute bottom-[15px] right-[15px] top-[15px] h-[calc(100%-30px)] w-[min(560px,calc(100vw-30px))] overflow-y-auto rounded-3xl bg-[#efefef] p-[15px] shadow-2xl transition duration-200 ${
+        aria-label="Shporta juaj"
+        className={`absolute bottom-[15px] right-[15px] top-[15px] h-[calc(100%-30px)] w-[min(560px,calc(100vw-30px))] overflow-y-auto rounded-3xl bg-white p-[15px] shadow-2xl transition duration-200 ${
           open ? "translate-x-0 opacity-100" : "translate-x-[calc(100%+42px)] opacity-0"
         }`}
       >
-        <div className="mb-6 flex items-center justify-between">
-          <p className="text-[1.55rem] font-semibold leading-none text-slate-900 md:text-[1.75rem]">Your Cart</p>
+        <div className="-mx-[15px] -mt-[15px] mb-6 flex items-center justify-end border-b border-slate-200 px-[15px] pb-3 pt-[15px]">
           <button
             type="button"
-            aria-label="Close cart drawer"
+            aria-label="Mbyll shporten"
             onClick={onClose}
             className="inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-full text-slate-700 transition hover:bg-white/80"
           >
@@ -324,8 +466,8 @@ export function SiteCartDrawer({ open, onClose, isLoggedIn }: SiteCartDrawerProp
                     <circle cx="17.5" cy="17.5" r="1.5" />
                   </svg>
                   {remainingForFreeShipping > 0
-                    ? `Spend ${formatCurrency(remainingForFreeShipping)} for free shipping`
-                    : "Free shipping unlocked"}
+                    ? `Shpenzo edhe ${formatCurrency(remainingForFreeShipping)} per transport falas`
+                    : "Transporti falas u aktivizua"}
                 </p>
                 <span className="text-xs font-semibold text-slate-500">{shippingProgress}%</span>
               </div>
@@ -358,7 +500,7 @@ export function SiteCartDrawer({ open, onClose, isLoggedIn }: SiteCartDrawerProp
                             type="button"
                             onClick={() => void handleDecrease(item.id, item.quantity)}
                             className="inline-flex h-8 w-8 cursor-pointer items-center justify-center text-base font-semibold text-slate-800 transition hover:bg-slate-200"
-                            aria-label={`Decrease quantity of ${item.name}`}
+                            aria-label={`Ule sasine e ${item.name}`}
                           >
                             -
                           </button>
@@ -369,7 +511,7 @@ export function SiteCartDrawer({ open, onClose, isLoggedIn }: SiteCartDrawerProp
                             type="button"
                             onClick={() => void handleIncrease(item.id, item.quantity)}
                             className="inline-flex h-8 w-8 cursor-pointer items-center justify-center text-base font-semibold text-slate-800 transition hover:bg-slate-200"
-                            aria-label={`Increase quantity of ${item.name}`}
+                            aria-label={`Rrit sasine e ${item.name}`}
                           >
                             +
                           </button>
@@ -378,7 +520,7 @@ export function SiteCartDrawer({ open, onClose, isLoggedIn }: SiteCartDrawerProp
                           type="button"
                           onClick={() => void handleRemove(item.id)}
                           className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-100"
-                          aria-label={`Remove ${item.name}`}
+                          aria-label={`Hiqe ${item.name}`}
                         >
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
                             <path d="M3 6h18" />
@@ -403,7 +545,7 @@ export function SiteCartDrawer({ open, onClose, isLoggedIn }: SiteCartDrawerProp
                 onClick={() => setInstructionsOpen((openState) => !openState)}
                 className="flex w-full cursor-pointer items-center justify-between border-b border-slate-300 pb-3 text-left text-xl font-medium text-slate-900"
               >
-                <span>Order special instructions</span>
+                <span>Udhezime speciale per porosine</span>
                 <span className="text-2xl leading-none">{instructionsOpen ? "-" : "+"}</span>
               </button>
               {instructionsOpen ? (
@@ -422,7 +564,7 @@ export function SiteCartDrawer({ open, onClose, isLoggedIn }: SiteCartDrawerProp
                 onClick={() => setDiscountOpen((openState) => !openState)}
                 className="flex w-full cursor-pointer items-center justify-between border-b border-slate-300 pb-3 text-left text-xl font-medium text-slate-900"
               >
-                <span>Discount</span>
+                <span>Ulje</span>
                 <span className="text-2xl leading-none">{discountOpen ? "-" : "+"}</span>
               </button>
               {discountOpen ? (
@@ -453,7 +595,7 @@ export function SiteCartDrawer({ open, onClose, isLoggedIn }: SiteCartDrawerProp
                           setCouponError("");
                         }
                       }}
-                      placeholder="Coupon code"
+                      placeholder="Kodi i kuponit"
                       className="h-10 flex-1 rounded-lg border border-slate-300 px-3 text-sm uppercase outline-none focus:border-slate-500"
                     />
                     <button
@@ -462,7 +604,7 @@ export function SiteCartDrawer({ open, onClose, isLoggedIn }: SiteCartDrawerProp
                       disabled={couponApplying}
                       className="h-10 cursor-pointer rounded-lg bg-slate-900 px-4 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      {couponApplying ? "Applying..." : "Apply"}
+                      {couponApplying ? "Po aplikohet..." : "Apliko"}
                     </button>
                   </div>
                   {couponError ? <p className="mt-2 text-sm font-medium text-rose-700">{couponError}</p> : null}
@@ -472,15 +614,15 @@ export function SiteCartDrawer({ open, onClose, isLoggedIn }: SiteCartDrawerProp
 
             <div className="mt-6">
               <p className="text-[2rem] font-semibold leading-tight text-slate-900">
-                Subtotal: {formatCurrency(checkoutTotal)} USD
+                Nentotali: {formatCurrency(checkoutTotal)} USD
               </p>
               {discountAmount > 0 ? (
                 <p className="mt-1 text-sm font-semibold text-emerald-700">
-                  Discount applied: -{formatCurrency(discountAmount)}
+                  Ulja e aplikuar: -{formatCurrency(discountAmount)}
                 </p>
               ) : null}
               <p className="mt-2 text-sm text-slate-600">
-                Tax included. Shipping and discounts calculated at checkout.
+                Taksa e perfshire. Transporti dhe uljet llogariten ne pagese.
               </p>
               <div className="mt-4 flex items-start gap-2 text-sm text-slate-700">
                 <input
@@ -524,78 +666,125 @@ export function SiteCartDrawer({ open, onClose, isLoggedIn }: SiteCartDrawerProp
                   <path d="M3 4h2l2.5 11h10.5l2-8H7" />
                 </svg>
               </div>
-              <p className="mt-4 text-3xl font-semibold leading-tight text-slate-900 md:text-[2rem]">Your Cart is Empty</p>
+              <p className="mt-4 text-[1.125rem] font-semibold leading-tight text-slate-900 md:text-[1.2rem]">
+                Shporta juaj eshte bosh
+              </p>
               <Link
                 href="/shop"
                 onClick={onClose}
-                className="mt-5 inline-flex cursor-pointer items-center justify-center rounded-xl bg-[#3558ff] px-5 py-3 text-lg font-semibold text-white transition hover:bg-[#2744dd]"
+                className="mt-5 inline-flex cursor-pointer items-center justify-center rounded-lg bg-[#3558ff] px-3 py-[0.45rem] text-[0.72rem] font-semibold text-white transition hover:bg-[#2744dd]"
               >
-                Continue Shopping
+                Vazhdo blerjet
               </Link>
               {!isLoggedIn ? (
                 <p className="mt-6 text-base text-slate-700">
-                  Have an account?{" "}
+                  Ke llogari?{" "}
                   <Link href="/login" onClick={onClose} className="font-semibold text-[#3558ff] hover:underline">
-                    Log in
+                    Hyr
                   </Link>{" "}
-                  to check out faster.
+                  per pagese me te shpejte.
                 </p>
               ) : null}
             </div>
 
             <div className="mt-8 border-t border-slate-300 pt-6">
-              <p className="text-2xl font-semibold text-slate-900">Top products of this week</p>
+              <p className="text-[0.9rem] font-semibold text-slate-900">Produktet kryesore te javes</p>
               {recommendationLoading ? (
-                <div className="mt-4 grid grid-cols-3 gap-3">
+                <div className="mt-4 grid grid-cols-3 gap-2">
                   {Array.from({ length: 3 }).map((_, index) => (
-                    <div key={`top-product-loading-${index}`} className="space-y-2">
-                      <div className="route-loading-shimmer h-36 overflow-hidden rounded-xl bg-slate-200" />
-                      <div className="h-3.5 w-full animate-pulse rounded bg-slate-200" />
-                      <div className="h-3.5 w-4/5 animate-pulse rounded bg-slate-200" />
+                    <div key={`top-product-loading-${index}`} className="space-y-2 rounded-lg bg-white p-1.5">
+                      <div className="route-loading-shimmer aspect-[137/175] overflow-hidden rounded-lg bg-slate-200" />
+                      <div className="h-3 w-full animate-pulse rounded bg-slate-200" />
+                      <div className="h-2.5 w-2/5 animate-pulse rounded bg-slate-200" />
                     </div>
                   ))}
                 </div>
               ) : recommendations.length > 0 ? (
-                <div className="mt-4 grid grid-cols-3 gap-3">
-                  {recommendations.map((product, index) => (
-                    <Link
-                      key={product.id}
-                      href={`/product/${product.slug}`}
-                      onClick={onClose}
-                      className="group rounded-xl border border-slate-200 bg-white p-2 transition hover:border-slate-300"
-                    >
-                      <div
-                        className="h-32 rounded-lg bg-slate-100 bg-cover bg-center"
-                        style={{ backgroundImage: `url('${product.image}')` }}
-                      />
-                      <p className="mt-2 truncate text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                        {product.category}
-                      </p>
-                      <p className="line-clamp-2 text-sm font-semibold text-slate-900">{product.name}</p>
-                      <p className="mt-1 text-2xl font-bold leading-none text-[#3558ff]">{formatCurrency(product.price)}</p>
-                      {index === 0 ? (
-                        <span className="mt-2 inline-flex rounded-lg bg-[#ff8a00] px-2 py-1 text-[11px] font-semibold text-white">
-                          Bestseller
-                        </span>
-                      ) : null}
-                    </Link>
-                  ))}
+                <div className="mt-4">
+                  <div
+                    ref={recommendationScrollerRef}
+                    className={`${canSlideRecommendations ? (isRecommendationSwiping ? "cursor-grabbing select-none" : "cursor-grab select-none") : ""} overflow-x-auto overflow-y-hidden [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden`}
+                    style={canSlideRecommendations ? { touchAction: "pan-y" } : undefined}
+                    onPointerDown={handleRecommendationPointerDown}
+                    onPointerMove={handleRecommendationPointerMove}
+                    onPointerUp={handleRecommendationPointerUp}
+                    onPointerCancel={handleRecommendationPointerCancel}
+                    onScroll={handleRecommendationScroll}
+                  >
+                    <div className="flex gap-2">
+                      {recommendations.map((product) => (
+                        <Link
+                          key={product.id}
+                          href={`/product/${product.slug}`}
+                          onClick={handleRecommendationCardClick}
+                          draggable={false}
+                          style={{ flex: "0 0 calc((100% - 16px) / 3)" }}
+                          className="group block rounded-lg bg-white p-1.5 transition"
+                        >
+                          <div
+                            aria-label={product.name}
+                            className="aspect-[137/175] w-full rounded-lg bg-cover bg-center"
+                            style={{ backgroundImage: `url('${product.image}')` }}
+                          />
+                          <p className="mt-1 line-clamp-2 text-[0.72rem] font-semibold text-slate-900">{product.name}</p>
+                          <p className="mt-1 text-[0.72rem] font-semibold text-[#3558ff]">{formatCurrency(product.price)}</p>
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                  {canSlideRecommendations ? (
+                    <div className="mt-3 flex items-center justify-start gap-2">
+                      <button
+                        type="button"
+                        onClick={slideRecommendationsPrev}
+                        className="inline-flex h-7 w-7 cursor-pointer items-center justify-center text-slate-500 transition hover:text-slate-700"
+                        aria-label="Produkti i meparshem"
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" className="h-4 w-4">
+                          <path d="M15 18l-6-6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      </button>
+                      <div className="flex items-center gap-1.5">
+                        {Array.from({ length: maxRecommendationPosition + 1 }).map((_, dotIndex) => (
+                          <button
+                            key={`recommendation-dot-${dotIndex}`}
+                            type="button"
+                            onClick={() => handleRecommendationDotClick(dotIndex)}
+                            className={`h-2.5 w-2.5 cursor-pointer rounded-full transition ${dotIndex === recommendationPosition ? "bg-slate-900" : "bg-slate-300 hover:bg-slate-400"}`}
+                            aria-label={`Shko te pozicioni ${dotIndex + 1}`}
+                          />
+                        ))}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={slideRecommendationsNext}
+                        className="inline-flex h-7 w-7 cursor-pointer items-center justify-center text-slate-500 transition hover:text-slate-700"
+                        aria-label="Produkti tjeter"
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" className="h-4 w-4">
+                          <path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
               ) : (
-                <p className="mt-3 text-sm text-slate-600">No featured products available yet.</p>
+                <p className="mt-3 text-sm text-slate-600">Nuk ka produkte te rekomanduara per momentin.</p>
               )}
             </div>
           </>
         )}
 
-        <div className="mt-8 flex items-center justify-between border-t border-slate-300 pt-4">
-          <Link href="/shop" onClick={onClose} className="text-lg font-semibold text-[#3558ff] hover:underline">
-            Continue Shopping
-          </Link>
-          <Link href="/cart" onClick={onClose} className="text-lg font-semibold text-[#3558ff] hover:underline">
-            View Cart
-          </Link>
-        </div>
+        {items.length > 0 ? (
+          <div className="mt-8 flex items-center justify-between border-t border-slate-300 pt-4">
+            <Link href="/shop" onClick={onClose} className="text-lg font-semibold text-[#3558ff] hover:underline">
+              Vazhdo blerjet
+            </Link>
+            <Link href="/cart" onClick={onClose} className="text-lg font-semibold text-[#3558ff] hover:underline">
+              Shiko shporten
+            </Link>
+          </div>
+        ) : null}
       </aside>
     </div>
   );
